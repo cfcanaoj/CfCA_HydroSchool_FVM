@@ -50,9 +50,9 @@ character(20),parameter::dirname="lax" ! directory name
 integer, parameter :: unitsnap = 17
 
 ! realtime analysis 
-integer, parameter :: unitevo = 11
-integer, parameter :: nevo = 3    ! the number of variables derived in the realtime analysis
-real(8) ::  phys_evo(nevo)    ! variables derived in the realtime analysis
+!integer, parameter :: unitevo = 11
+!integer, parameter :: nevo = 3    ! the number of variables derived in the realtime analysis
+!real(8) ::  phys_evo(nevo)    ! variables derived in the realtime analysis
 
      ! make the directory for output
      call makedirs(trim(dirname))
@@ -60,11 +60,11 @@ real(8) ::  phys_evo(nevo)    ! variables derived in the realtime analysis
      call GenerateGrid(xf, xv)
      call GenerateProblem(xv, Q)
      call PrIMYConsv(Q, U)
-     call Output( .TRUE., dirname, xf, xv, Q )
+     call Output( .TRUE., dirname, xv, Q )
 
       write(6,*) "Start the simulation"
       !open file to output the result of the realtime analysis
-      open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
+!      open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
       mloop: do 
          dt = TimestepControl(xf, Q)
@@ -76,31 +76,39 @@ real(8) ::  phys_evo(nevo)    ! variables derived in the realtime analysis
          time=time+dt
          print*,"time = ",time, "dt = ",dt
          ntime = ntime + 1
-         call Output( .FALSE., dirname, xf, xv, Q )
+         call Output( .FALSE., dirname, xv, Q )
 
-         if( mod(ntime,10) .eq. 0 ) then
-            call RealtimeAnalysis(xf,xv,Q,phys_evo)
-            write(unitevo,*) time, phys_evo(1:nevo)
-         endif
+!         if( mod(ntime,10) .eq. 0 ) then
+!            call RealtimeAnalysis(xf,xv,Q,phys_evo)
+!            write(unitevo,*) time, phys_evo(1:nevo)
+!         endif
 
 
          if(time >= timemax) exit mloop
       enddo mloop
-      call Output( .TRUE., dirname, xf, xv, Q )
-      call AnalysisAfterSimu(time,xf,xv,Q)
+      call Output( .TRUE., dirname, xv, Q )
+!      call AnalysisAfterSimu(time,xf,xv,Q)
 
 !      write(6,*) "program has been finished"
 contains
 
-!-------------------------------------------------------------------
-!       Generate coordiantes
-!       xf --> cell boundary xf(i) <==> x_{i-1/2}
-!       xv --> cell center   xv(i) <==> x_{i}
-!-------------------------------------------------------------------
+!=============================================================
+! GenerateGrid
+! Description:
+!   Generate a 1D uniform grid for a finite-volume scheme.
+!   This routine fills:
+!     - xf(:): face (cell-boundary) coordinates
+!     - xv(:): cell-center coordinates
+!   The grid uses global parameters (x1min, x1max, nx, ngh, ...).
+!
+! Notes:
+!   Be careful about array sizes when mixing cell-centered and face-centered
+!   quantities. The number of faces is (number of cells + 1).
+!=============================================================
 subroutine GenerateGrid(xf, xv)
 implicit none
 real(8), intent(out) :: xf(:), xv(:)
-real(8) :: dx,dy
+real(8) :: dx
 integer::i
 
     dx=(xmax-xmin)/nx
@@ -114,10 +122,16 @@ integer::i
 
 return
 end subroutine GenerateGrid
-
-!-------------------------------------------------------------------
-!       Generate initial condition of the primitive variables
-!-------------------------------------------------------------------
+!=============================================================
+! GenerateProblem
+! Description:
+!   Set initial conditions for a 1D Riemann problem (Brio-Wu shock tube).
+!   The primitive variables Q(i,:) = (rho, v, p) are assigned based on xv(i):
+!     - left  state (x < 0):   rho = 1.0,   v = (0,0,0), p = 1.0, B = (0.75,1,0)
+!     - right state (x > 0):   rho = 0.125, v = (0,0,0), p = 0.1, B = (0.75,-1,0)
+!   The routine typically initializes only the active zone (i=is:ie).
+!   Ghost zones are filled later by BoundaryCondition().
+!=============================================================
 subroutine GenerateProblem(xv, Q)
 implicit none
 integer::i
@@ -149,10 +163,13 @@ real(8), intent(out) :: Q(:,:)
 
 return
 end subroutine GenerateProblem
-
-!-------------------------------------------------------------------
-!       Boundary Condition of the primitive variables
-!-------------------------------------------------------------------
+!=============================================================
+! BoundaryCondition
+! Description:
+!   Apply boundary conditions by filling ghost cells ( i < is and i > ie ) 
+!   of the primitive array Q.
+!
+!=============================================================
 subroutine BoundaryCondition(Q)
 implicit none
 real(8), intent(inout) :: Q(:,:)
@@ -174,12 +191,15 @@ integer::i,ihy
 
 return
 end subroutine BoundaryCondition
-!-------------------------------------------------------------------
-!       Primitive variables ===> Conservative variables
-!       Input  : Q
-!       Output : U
-!-------------------------------------------------------------------
-!
+!=============================================================
+! Prim2Consv
+! Description:
+!   Convert primitive variables Q = (rho, v, p) to conservative variables
+!   U = (rho, mom, E) for the 1D Euler equations with an ideal-gas EOS.
+!     - mom = rho * v
+!     - E   = 0.5 * rho * v^2 + p / (gam - 1) + 0.5 * B^2
+!   Operates on the active zone (i=is:ie).
+!=============================================================
 subroutine PrIMYConsv(Q, U)
 implicit none
 real(8), intent(in) :: Q(:,:)
@@ -200,11 +220,15 @@ integer::i
       
 return
 end subroutine PrIMYConsv
-!-------------------------------------------------------------------
-!       Conservative variables ===> Primitive variables
-!       Input  : U
-!       Output : Q
-!-------------------------------------------------------------------
+!=============================================================
+! Consv2Prim
+! Description:
+!   Convert conservative variables U = (rho, mom, E) to primitive variables
+!   Q = (rho, v, p) for the 1D Euler equations with an ideal-gas EOS.
+!     - v = mom / rho
+!     - p = (E - 0.5 * mom^2 / rho - 0.5 * B^2) * (gam - 1)
+!   Operates on the active zone (i=is:ie).
+!=============================================================
 subroutine Consv2Prim( U, Q )
 implicit none
 real(8), intent(in) :: U(:,:)
@@ -227,15 +251,24 @@ real(8) :: inv_d;
 
 return
 end subroutine Consv2Prim
-!-------------------------------------------------------------------
-!       determine dt 
-!-------------------------------------------------------------------
+!=============================================================
+! TimestepControl
+! Description:
+!   Compute a stable time step dt based on a CFL condition for the 1D Euler
+!   equations.
+!
+! Inputs:
+!   xf(:)    Face coordinates (used to compute cell widths dx)
+!   Q(:,:)   Primitive variables Q=(rho, v, p) in the active zone
+!
+! Output:
+!   dt       Time step satisfying
+!              dt = CFL * min_i [ dx_i / (|v_i| + c_s,i) ]
+!            where c_s = sqrt(gam * p / rho).
+!=============================================================
 Real(8) Function TimestepControl(xf, Q) 
 implicit none
 real(8), intent(in) :: xf(:), Q(:,:)
-real(8)::dtl1
-real(8)::dtl2
-real(8)::dtl3
 real(8)::dtlocal
 real(8)::dtmin,cf
 integer::i
@@ -251,18 +284,15 @@ integer::i
       TimestepControl = 0.1d0 * dtmin
 return
 end function TimestepControl
-
-!---------------------------------------------------------------------
-!     NumericalFlux
-!---------------------------------------------------------------------
-!     computes the numerical flux at the cell boundary 
-!
-!     Input: Q: primitive variables at the cell center
-!
-!     Input: B: magnetic fields
-!
-!     Output: flux : the numerical flux estimated at the cell boundary
-!---------------------------------------------------------------------
+!=============================================================
+! NumericalFlux
+! Description:
+!   Compute numerical fluxes at cell faces from cell-centered primitive states.
+!   Steps:
+!     1) Reconstruct left/right states at each interface (here: 1st-order,
+!        piecewise-constant reconstruction).
+!     2) Solve an approximate Riemann problem to obtain the interface flux.
+!=============================================================
 subroutine NumericalFlux( Q, flux )
 implicit none
 real(8), intent(in) :: Q(:,:)
@@ -289,8 +319,8 @@ real(8) :: dQm, dQp, dQ
       enddo
 
       do i=is,ie+1
-!         call Lax((xv(i) - xv(i-1))/dt,Ql(i,:),Qr(i,:),flx(:))
-         call HLL(Ql(i,:),Qr(i,:),flx)
+         call Lax((xv(i) - xv(i-1))/dt,Ql(i,:),Qr(i,:),flx(:))
+!         call HLL(Ql(i,:),Qr(i,:),flx)
 !         call HLLD(Ql(i,:),Qr(i,:),flx)
          flux(i,:)  = flx(:)
       enddo
@@ -298,23 +328,40 @@ real(8) :: dQm, dQp, dQ
 
       return
       end subroutine Numericalflux
-
-!-------------------------------------------------------------------
-!       The Lax Flux derived from the left and right quantities
-!       Input  : dxdt, Ql, Qr
-!       Output : flx
-!-------------------------------------------------------------------
+!=============================================================
+! Lax
+! Description:
+!   Compute the numerical flux at a cell interface using the
+!   Lax (Lax–Friedrichs / Rusanov-type) flux formula for the 1D Euler equations.
+!
+! Inputs:
+!   a        Numerical dissipation speed (typically dx/dt, or a maximum wave speed)
+!   Ql(:)    Left primitive state  (rho, v, p, B)
+!   Qr(:)    Right primitive state (rho, v, p, B)
+!
+! Output:
+!   flx(:)   Conservative flux (mass, momentum, energy) at the interface.
+!
+! Method:
+!   1) Convert Ql and Qr to conservative variables Ul, Ur.
+!   2) Compute physical fluxes Fl(Ul), Fr(Ur).
+!   3) Return
+!        flx = 0.5*(Fl + Fr) - 0.5*a*(Ur - Ul)
+!
+! Notes:
+!   - a controls numerical viscosity. Using a = dx/dt corresponds to the classic
+!     Lax–Friedrichs scheme; using a = max(|v|+cs) gives the local Lax–Friedrichs
+!     (Rusanov) flux.
+!=============================================================
 subroutine Lax(dxdt,Ql,Qr,flx)
 implicit none
 real(8),intent(in)  :: Ql(:), Qr(:)
 real(8),intent(in)  :: dxdt
 real(8),intent(out) :: flx(:)
-integer :: i, n
+integer :: n
 real(8):: Ul(NVAR), Ur(NVAR)
 real(8):: Fl(NVAR), Fr(NVAR)
-real(8):: csl,csr,pbl,pbr,ptotl,ptotr
-real(8):: sl, sr
-
+real(8):: pbl,pbr,ptotl,ptotr
 
     pbl = 0.5d0*(Bx**2 + Ql(IBY)**2 + Ql(IBZ)**2)
     pbr = 0.5d0*(Bx**2 + Qr(IBY)**2 + Qr(IBZ)**2)
@@ -366,38 +413,28 @@ real(8):: sl, sr
 
 return
 end subroutine Lax
-
-!---------------------------------------------------------------------
-!     HLL Riemann Solver
-!---------------------------------------------------------------------
-!     solve the HLL Riemann solver 
+!=============================================================
+! HLL
+! Description:
+!   Compute the interface flux using the HLL approximate Riemann solver for
+!   the 1D Euler equations.
 !
-!     Input: Ql, Qr: primitive variables containing the perpendicular B fields 
-!                    at the left and right states
-!            1D array (IDN, IVX, IVY, IVZ, IPR, IBY, IBZ)
-!                                 |
-!                                 |
-!                           Ql    |    Qr
-!                                 |
-!                                -->
-!                                flx
+! Inputs:
+!   Ql(:)  Left primitive state  (rho, v, p)
+!   Qr(:)  Right primitive state (rho, v, p)
 !
-!     Input: b1    : magnetic field perpendicular to the initial discontinuity
-!
-!     Output: flx  : flux estimated at the initial discontinuity
-!            index: (IDN, IVX, IVY, IVZ, IPR, IBY, IBZ)
-!---------------------------------------------------------------------
+! Output:
+!   flx(:) Conservative flux (mass, momentum, energy)
+!=============================================================
 subroutine HLL(Ql,Qr,flx)
 implicit none
 real(8),intent(in)::Ql(:), Qr(:)
 real(8),intent(out) :: flx(:)
 real(8):: Ul(NFLX), Ur(NFLX)
 real(8):: Fl(NFLX), Fr(NFLX)
-real(8):: Fst(NFLX)
 real(8):: cfl,cfr
 real(8):: sl, sr
 real(8):: pbl, pbr, ptotl, ptotr
-integer :: i, n
 
     pbl = 0.5d0*(Bx**2 + Ql(IBY)**2 + Ql(IBZ)**2)
     pbr = 0.5d0*(Bx**2 + Qr(IBY)**2 + Qr(IBZ)**2)
@@ -467,44 +504,33 @@ integer :: i, n
 
 return
 end subroutine HLL
-
-!---------------------------------------------------------------------
-!     HLLD Riemann Solver
-!---------------------------------------------------------------------
-!     solve the HLL Riemann solver 
+!=============================================================
+! HLLD
+! Description:
+!   Compute the interface flux using the HLLD approximate Riemann solver for
+!   the 1D Euler equations.
 !
-!     Input: Ql, Qr: primitive variables containing the perpendicular B fields 
-!                    at the left and right states
-!            1D array (IDN, IVX, IVY, IVZ, IPR, IBperp1, IBperp2)
-!                                 |
-!                                 |
-!                           Ql    |    Qr
-!                                 |
-!                                -->
-!                                flx
+! Inputs:
+!   Ql(:)  Left primitive state  (rho, v, p)
+!   Qr(:)  Right primitive state (rho, v, p)
 !
-!     Input: b1    : magnetic field perpendicular to the initial discontinuity
-!
-!     Output: flx  : flux estimated at the initial discontinuity
-!            index: (IDN, IVX, IVY, IVZ, IPR, IBperp1, IBperp2)
-!---------------------------------------------------------------------
+! Output:
+!   flx(:) Conservative flux (mass, momentum, energy)
+!=============================================================
 subroutine HLLD(Ql,Qr,flx)
 implicit none
 real(8),intent(in)  ::Ql(:), Qr(:)
 real(8),intent(out) :: flx(:)
-real(8):: b1
 real(8):: Ul(NFLX), Ur(NFLX)
 real(8):: Ulst(NFLX), Urst(NFLX)
 real(8):: Uldst(NFLX), Urdst(NFLX)
 real(8):: Fl(NFLX), Fr(NFLX)
-real(8):: test(NFLX)
 real(8):: cfl,cfr
 real(8):: S0, S1, S2, S3, S4
 real(8):: pbl, pbr, ptotl, ptotr
 real(8) :: sqrtdl, sqrtdr, v_dot_B_stl, v_dot_B_str
 real(8) :: Ulst_d_inv, Urst_d_inv, sum_sqrtd_inv, tmp
 real(8) :: ptot_stl, ptot_str,ptot_st, Cl, Cr, Cml, Cmr, Cml_inv, Cmr_inv, bxsgn
-integer :: i, n
 
     pbl = 0.5d0*(Bx**2 + Ql(IBY)**2 + Ql(IBZ)**2)
     pbr = 0.5d0*(Bx**2 + Qr(IBY)**2 + Qr(IBZ)**2)
@@ -678,10 +704,6 @@ integer :: i, n
        Urdst(IEN) = Urst(IEN) + sqrtdr*bxsgn*(v_dot_B_str - tmp)
    endif
 
-!         test = (S4 - S3)*Urst + (S3 - S2)*Urdst + (S2 - S1)*Uldst + (S1 - S0)*Ulst - S4*Ur + S0*Ul + Fr - Fl
-!         print*,test(IVperp2)
-         
-
     !--- Step 6.  Compute flux
     if( S0 >= 0.0d0 ) then
          flx(:) = Fl(:)
@@ -699,10 +721,21 @@ integer :: i, n
 
 return
 end subroutine HLLD
-!-------------------------------------------------------------------
-!       Update consevative variables U using numerical flux F
-!-------------------------------------------------------------------
-
+!=============================================================
+! UpdateConsv
+! Description:
+!   Update conservative variables U by one finite-volume time step:
+!     U_i^{n+1} = U_i^{n} - dt * (F_{i+1/2} - F_{i-1/2}) / dx_i
+!   where dx_i is computed from face coordinates xf.
+!
+! Inputs:
+!   dt     Time step
+!   xf(:)  Face coordinates
+!   F(:,:) Interface fluxes (at faces)
+!
+! In/Out:
+!   U(:,:) Conservative variables updated in-place (active zone i=is:ie).
+!=============================================================
 subroutine UpdateConsv( dt, xf, flux, U )
 implicit none
 real(8), intent(in)  :: flux(:,:), dt, xf(:)
@@ -718,18 +751,28 @@ integer::i,n
 
 return
 end subroutine UpdateConsv
-!-------------------------------------------------------------------
-!       Output snapshot files 
-!       Input  : flag, dirname, xf, xv, Q
+!=============================================================
+! Output
+! Description:
+!   Write snapshot output of the solution (cell centers and primitive variables).
+!   The routine decides whether to output based on an internal snapshot clock
+!   (e.g., tsnap and dtsnap) and a logical flag argument.
 !
-!       flag = .true.  --> output snapshot when calling this subroutine
-!       flag = .false. --> output snapshot every dtsnap
-!-------------------------------------------------------------------
-subroutine Output( flag, dirname, xf, xv, Q )
+! Inputs:
+!   flag     If true, check output condition and write if needed
+!   dirname  Output directory name
+!   xv(:)    Cell-center coordinates
+!   Q(:,:)   Primitive variables to be written
+!
+! Notes:
+!   With variable dt, consider using a "while (time >= next_output_time)" style
+!   to avoid missing outputs when the simulation time jumps over an output time.
+!=============================================================
+subroutine Output( flag, dirname, xv, Q )
 implicit none
 logical,       intent(in) :: flag
 character(20), intent(in) :: dirname 
-real(8),       intent(in) :: xf(:), xv(:), Q(:,:)
+real(8),       intent(in) :: xv(:), Q(:,:)
 real(8), parameter:: dtsnap=5.0d-3
 integer::i
 character(40) :: filename
@@ -758,47 +801,69 @@ integer, save :: nsnap = 0
 
 return
 end subroutine Output
-!-------------------------------------------------------------------
-!       Realtime Analysis
-!       Input  : xf, xv
-!       Output : phys_evo(nevo)
-!-------------------------------------------------------------------
-subroutine RealtimeAnalysis(xf,xv,Q,phys_evo)
-real(8), intent(in)  :: xf(:), xv(:), Q(:,:)
-real(8), intent(out) :: phys_evo(:)
-integer :: i,j,k
-real(8) :: tmp
-
-      tmp = 0.0d0
-      do i=is,ie
-           tmp = tmp + 1.0d0
-      enddo
-      phys_evo(1) = tmp/dble(nx)
-      
-return
-end subroutine
-!-------------------------------------------------------------------
-!       Analysis after simulation
-!       Input  : xf, xv, Q
-!-------------------------------------------------------------------
-subroutine AnalysisAfterSimu(time,xf,xv,Q)
-real(8), intent(in)  :: xf(:), xv(:), Q(:,:)
-real(8), intent(in)  :: time
-integer :: i
-real(8) :: error
-
-      error = 0.0d0
-      do i=is,ie
-           error = error + 1.0d0
-      enddo
-      print*, nx, error
-      
-return
-end subroutine
-!-------------------------------------------------------------------
-!       create directory
-!       Input  : the directory to be created
-!-------------------------------------------------------------------
+!=============================================================
+! RealtimeAnalysis
+! Description:
+!   Perform on-the-fly diagnostics during the simulation loop.
+!   This routine is intended to be called every chosen interval to 
+!   monitor the run without generating heavy I/O.
+!
+! Inputs:
+!   xv(:)    Cell-center coordinates
+!   Q(:,:)   Primitive variables Q=(rho, v, p)
+!   U(:,:)   Conservative variables U=(rho, mom, E) (optional but useful)
+!=============================================================
+!subroutine RealtimeAnalysis(xf,xv,Q,phys_evo)
+!real(8), intent(in)  :: xf(:), xv(:), Q(:,:)
+!real(8), intent(out) :: phys_evo(:)
+!integer :: i
+!real(8) :: tmp
+!
+!      tmp = 0.0d0
+!      do i=is,ie
+!           tmp = tmp + 1.0d0
+!      enddo
+!      phys_evo(1) = tmp/dble(nx)
+!      
+!return
+!end subroutine
+!=============================================================
+! AnalysisAfterSimu
+! Description:
+!   Perform post-processing after the time integration has finished.
+!   This routine is intended to be called once at the end of the run to produce
+!   summary diagnostics and/or derived outputs.
+!
+! Inputs:
+!   dirname  Output directory name where snapshots/logs are stored
+!   xv(:)    Cell-center coordinates
+!   Q(:,:)   Final primitive variables Q=(rho, v, p)
+!   U(:,:)   Final conservative variables U=(rho, mom, E)
+!=============================================================
+!subroutine AnalysisAfterSimu(time,xf,xv,Q)
+!real(8), intent(in)  :: xf(:), xv(:), Q(:,:)
+!real(8), intent(in)  :: time
+!integer :: i
+!real(8) :: error
+!
+!      error = 0.0d0
+!      do i=is,ie
+!           error = error + 1.0d0
+!      enddo
+!      print*, nx, error
+!      
+!return
+!end subroutine
+!=============================================================
+! makedirs
+! Description:
+!   Create an output directory if it does not exist.
+!   This routine runs the OS command:
+!     mkdir -p 'outdir'
+!   so that:
+!     - If the directory already exists: it succeeds and does nothing.
+!     - If parent directories are missing: they are created.
+!=============================================================
 subroutine makedirs(outdir)
 implicit none
 character(len=*), intent(in) :: outdir
