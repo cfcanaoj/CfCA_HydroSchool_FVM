@@ -1,10 +1,4 @@
-program main
-implicit none
-
-! time evolution
-integer :: ntime = 0    ! counter of the timestep
-real(8) :: time = 0.0d0  ! time 
-real(8) :: dt   = 0.0d0  ! time width
+module params
 real(8),parameter:: timemax=0.1d0 ! simulation end time
 
 integer,parameter::nx=256*1       ! the number of grids in the simulation box
@@ -36,61 +30,78 @@ integer, parameter :: IEN = 5
 ! adiabatic index
 real(8),parameter::gam=5.0d0/3.0d0 
 
-
-! definition of arrays 
-real(8),dimension(nxtot)::xf,xv
-real(8),dimension(nxtot,NVAR) :: U
-real(8),dimension(nxtot,NVAR) :: Q
-real(8),dimension(nxtot,NFLX) :: flux
-
 ! output 
 character(20),parameter::dirname="lax" ! directory name
+
+! Riemann solver
+integer, parameter :: flag_flux = 3 ! 1 (Lax), 2 (HLL), 3 (HLLD)
 
 ! snapshot
 integer, parameter :: unitsnap = 17
 
 ! realtime analysis 
-!integer, parameter :: unitevo = 11
-!integer, parameter :: nevo = 3    ! the number of variables derived in the realtime analysis
-!real(8) ::  phys_evo(nevo)    ! variables derived in the realtime analysis
+integer, parameter :: unitevo = 11
+integer, parameter :: nevo = 1    ! the number of variables derived in the realtime analysis
+
+end module
+
+program main
+use params, only: nxtot, NVAR, NFLX, dirname, timemax, nevo, unitevo
+implicit none
+include "interfaces.inc"
+
+! time evolution
+integer :: ntime = 0    ! counter of the timestep
+real(8) :: time = 0.0d0  ! time 
+real(8) :: dt   = 0.0d0  ! time width
+
+! definition of arrays 
+real(8),dimension(nxtot)::xf,xv
+real(8),dimension(NVAR,nxtot) :: U
+real(8),dimension(NVAR,nxtot) :: Q
+real(8),dimension(NFLX,nxtot) :: flux
+
+
+real(8) ::  phys_evo(nevo)    ! variables derived in the realtime analysis
 
      ! make the directory for output
      call makedirs(trim(dirname))
 
      call GenerateGrid(xf, xv)
      call GenerateProblem(xv, Q)
-     call PrIMYConsv(Q, U)
-     call Output( .TRUE., dirname, xv, Q )
+     call Prim2Consv(Q, U)
+     call Output( time, .TRUE., xv, Q )
 
       write(6,*) "Start the simulation"
       !open file to output the result of the realtime analysis
-!      open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
+      open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
       mloop: do 
          dt = TimestepControl(xf, Q)
          if( time + dt > timemax ) dt = timemax - time
          call BoundaryCondition( Q)
-         call NumericalFlux( Q, flux )
+         call NumericalFlux( dt, xv, Q, flux )
          call UpdateConsv( dt, xf, flux, U)
          call Consv2Prim( U, Q )
          time=time+dt
          print*,"time = ",time, "dt = ",dt
          ntime = ntime + 1
-         call Output( .FALSE., dirname, xv, Q )
+         call Output( time, .FALSE., xv, Q )
 
-!         if( mod(ntime,10) .eq. 0 ) then
-!            call RealtimeAnalysis(xf,xv,Q,phys_evo)
-!            write(unitevo,*) time, phys_evo(1:nevo)
-!         endif
+         if( mod(ntime,10) .eq. 0 ) then
+            call RealtimeAnalysis(xv,Q,phys_evo)
+            write(unitevo,*) time, phys_evo(1:nevo)
+         endif
 
 
          if(time >= timemax) exit mloop
       enddo mloop
-      call Output( .TRUE., dirname, xv, Q )
-!      call AnalysisAfterSimu(time,xf,xv,Q)
+      call Output( time, .TRUE., xv, Q )
+!!      call AnalysisAfterSimu(time,xf,xv,Q)
 
-!      write(6,*) "program has been finished"
-contains
+      write(6,*) "program has been finished"
+
+end program main
 
 !=============================================================
 ! GenerateGrid
@@ -106,6 +117,7 @@ contains
 !   quantities. The number of faces is (number of cells + 1).
 !=============================================================
 subroutine GenerateGrid(xf, xv)
+use params, only : nxtot, ngh, nx, xmax, xmin
 implicit none
 real(8), intent(out) :: xf(:), xv(:)
 real(8) :: dx
@@ -133,6 +145,7 @@ end subroutine GenerateGrid
 !   Ghost zones are filled later by BoundaryCondition().
 !=============================================================
 subroutine GenerateProblem(xv, Q)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBY, IBZ, is, ie 
 implicit none
 integer::i
 real(8), intent(in ) :: xv(:)
@@ -140,21 +153,21 @@ real(8), intent(out) :: Q(:,:)
 
     do i=is,ie
         if( xv(i) < 0.0d0 ) then 
-             Q(i,IDN) = 1.0d0
-             Q(i,IVX) = 0.0d0
-             Q(i,IVY) = 0.0d0
-             Q(i,IVZ) = 0.0d0
-             Q(i,IPR) = 1.0d0
-             Q(i,IBY) = 1.0d0
-             Q(i,IBZ) = 0.0d0
+             Q(IDN,i) = 1.0d0
+             Q(IVX,i) = 0.0d0
+             Q(IVY,i) = 0.0d0
+             Q(IVZ,i) = 0.0d0
+             Q(IPR,i) = 1.0d0
+             Q(IBY,i) = 1.0d0
+             Q(IBZ,i) = 0.0d0
         else 
-             Q(i,IDN) = 0.125d0
-             Q(i,IVX) = 0.0d0
-             Q(i,IVY) = 0.0d0
-             Q(i,IVZ) = 0.0d0
-             Q(i,IPR) = 0.1d0
-             Q(i,IBY) = -1.0d0
-             Q(i,IBZ) = 0.0d0
+             Q(IDN,i) = 0.125d0
+             Q(IVX,i) = 0.0d0
+             Q(IVY,i) = 0.0d0
+             Q(IVZ,i) = 0.0d0
+             Q(IPR,i) = 0.1d0
+             Q(IBY,i) = -1.0d0
+             Q(IBZ,i) = 0.0d0
          endif
     enddo
 
@@ -171,21 +184,20 @@ end subroutine GenerateProblem
 !
 !=============================================================
 subroutine BoundaryCondition(Q)
+use params, only : NVAR, ngh, is, ie
 implicit none
 real(8), intent(inout) :: Q(:,:)
 integer::i,ihy
 
-
- 
-      do ihy=1,NVAR
       do i=1,ngh
-          Q(is-i,ihy)  = Q(is-1+i,ihy)
+      do ihy=1,NVAR
+          Q(ihy,is-i)  = Q(ihy,is-1+i)
       enddo
       enddo
 
-      do ihy=1,NVAR
       do i=1,ngh
-          Q(ie+i,ihy) = Q(ie-i+1,ihy)
+      do ihy=1,NVAR
+          Q(ihy,ie+i) = Q(ihy,ie-i+1)
       enddo
       enddo
 
@@ -200,26 +212,28 @@ end subroutine BoundaryCondition
 !     - E   = 0.5 * rho * v^2 + p / (gam - 1) + 0.5 * B^2
 !   Operates on the active zone (i=is:ie).
 !=============================================================
-subroutine PrIMYConsv(Q, U)
+subroutine Prim2Consv(Q, U)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, is, ie, Bx, gam
 implicit none
 real(8), intent(in) :: Q(:,:)
 real(8), intent(out) :: U(:,:)
 integer::i
 
       do i=is,ie
-          U(i,IDN) = Q(i,IDN)
-          U(i,IMX) = Q(i,IDN)*Q(i,IVX)
-          U(i,IMY) = Q(i,IDN)*Q(i,IVY)
-          U(i,IMZ) = Q(i,IDN)*Q(i,IVZ)
-          U(i,IEN) = 0.5d0*Q(i,IDN)*( Q(i,IVX)**2 + Q(i,IVY)**2 + Q(i,IVZ)**2 ) &
-                   + 0.5d0*( Bx**2 + Q(i,IBY)**2 + Q(i,IBZ)**2 ) &
-                   + Q(i,IPR)/(gam - 1.0d0)
-          U(i,IBY) = Q(i,IBY)
-          U(i,IBZ) = Q(i,IBZ)
+          U(IDN,i) = Q(IDN,i)
+          U(IMX,i) = Q(IDN,i)*Q(IVX,i)
+          U(IMY,i) = Q(IDN,i)*Q(IVY,i)
+          U(IMZ,i) = Q(IDN,i)*Q(IVZ,i)
+          U(IEN,i) = 0.5d0*Q(IDN,i)*( Q(IVX,i)**2 + Q(IVY,i)**2 + Q(IVZ,i)**2 ) &
+                   + 0.5d0*( Bx**2 + Q(IBY,i)**2 + Q(IBZ,i)**2 ) &
+                   + Q(IPR,i)/(gam - 1.0d0)
+          U(IBY,i) = Q(IBY,i)
+          U(IBZ,i) = Q(IBZ,i)
       enddo
       
 return
-end subroutine PrIMYConsv
+end subroutine Prim2Consv
 !=============================================================
 ! Consv2Prim
 ! Description:
@@ -230,6 +244,8 @@ end subroutine PrIMYConsv
 !   Operates on the active zone (i=is:ie).
 !=============================================================
 subroutine Consv2Prim( U, Q )
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, is, ie, Bx, gam
 implicit none
 real(8), intent(in) :: U(:,:)
 real(8), intent(out) :: Q(:,:)
@@ -237,16 +253,16 @@ integer::i
 real(8) :: inv_d;
 
     do i=is,ie
-        Q(i,IDN) = U(i,IDN)
-        inv_d = 1.0d0/U(i,IDN)
-        Q(i,IVX) = U(i,IMX)*inv_d
-        Q(i,IVY) = U(i,IMY)*inv_d
-        Q(i,IVZ) = U(i,IMZ)*inv_d
-        Q(i,IPR) = ( U(i,IEN) &
-                    - 0.5d0*(U(i,IMX)**2 + U(i,IMY)**2 + U(i,IMZ)**2)*inv_d  &
-                    - 0.5d0*(Bx**2 + U(i,IBY)**2 + U(i,IBZ)**2) )*(gam-1.0d0)
-        Q(i,IBY) = U(i,IBY)
-        Q(i,IBZ) = U(i,IBZ)
+        Q(IDN,i) = U(IDN,i)
+        inv_d = 1.0d0/U(IDN,i)
+        Q(IVX,i) = U(IMX,i)*inv_d
+        Q(IVY,i) = U(IMY,i)*inv_d
+        Q(IVZ,i) = U(IMZ,i)*inv_d
+        Q(IPR,i) = ( U(IEN,i) &
+                    - 0.5d0*(U(IMX,i)**2 + U(IMY,i)**2 + U(IMZ,i)**2)*inv_d  &
+                    - 0.5d0*(Bx**2 + U(IBY,i)**2 + U(IBZ,i)**2) )*(gam-1.0d0)
+        Q(IBY,i) = U(IBY,i)
+        Q(IBZ,i) = U(IBZ,i)
     enddo
 
 return
@@ -267,6 +283,7 @@ end subroutine Consv2Prim
 !            where c_s = sqrt(gam * p / rho).
 !=============================================================
 Real(8) Function TimestepControl(xf, Q) 
+use params, only : IDN, IVX, IPR, IBY, IBZ, Bx, gam, is, ie
 implicit none
 real(8), intent(in) :: xf(:), Q(:,:)
 real(8)::dtlocal
@@ -276,8 +293,8 @@ integer::i
     dtmin=1.0d90
 
     do i=is,ie
-         cf = dsqrt( (gam*Q(i,IPR) + Bx**2 + Q(i,IBY)**2 + Q(i,IBZ)**2)/Q(i,IDN))
-         dtlocal =(xf(i+1)-xf(i))/(abs(Q(i,IVX)) + cf)
+         cf = dsqrt( (gam*Q(IPR,i) + Bx**2 + Q(IBY,i)**2 + Q(IBZ,i)**2)/Q(IDN,i))
+         dtlocal =(xf(i+1)-xf(i))/(abs(Q(IVX,i)) + cf)
          if(dtlocal .lt. dtmin) dtmin = dtlocal
     enddo
 
@@ -293,19 +310,22 @@ end function TimestepControl
 !        piecewise-constant reconstruction).
 !     2) Solve an approximate Riemann problem to obtain the interface flux.
 !=============================================================
-subroutine NumericalFlux( Q, flux )
+subroutine NumericalFlux( dt, xv, Q, flux )
+use params, only : NVAR, is, ie, nxtot, NFLX, flag_flux
 implicit none
+real(8), intent(in) :: dt
+real(8), intent(in) :: xv(:)
 real(8), intent(in) :: Q(:,:)
 real(8), intent(out) :: flux(:,:)
-real(8),dimension(nxtot,NFLX):: Ql,Qr
+real(8),dimension(NFLX,nxtot):: Ql,Qr
 real(8),dimension(NFLX):: flx
 integer::i,ihy
 real(8) :: dQm, dQp, dQ
 
       do ihy=1,NVAR
       do i=is-1,ie+1
-         dQp = Q(i+1,ihy) - Q(i  ,ihy)
-         dQm = Q(i  ,ihy) - Q(i-1,ihy)
+         dQp = Q(ihy,i+1) - Q(ihy,i  )
+         dQm = Q(ihy,i  ) - Q(ihy,i-1)
 
          if(dQp*dQm .gt. 0.0d0)then
             dQ = 2.0d0*dQp*dQm/(dQp+dQm)
@@ -313,16 +333,20 @@ real(8) :: dQm, dQp, dQ
             dQ = 0.0d0
          endif
 
-         Ql(i+1,ihy) = Q(i,ihy) + 0.5d0*dQ
-         Qr(i  ,ihy) = Q(i,ihy) - 0.5d0*dQ
+         Ql(ihy,i+1) = Q(ihy,i) + 0.5d0*dQ
+         Qr(ihy,i  ) = Q(ihy,i) - 0.5d0*dQ
       enddo
       enddo
 
       do i=is,ie+1
-         call Lax((xv(i) - xv(i-1))/dt,Ql(i,:),Qr(i,:),flx(:))
-!         call HLL(Ql(i,:),Qr(i,:),flx)
-!         call HLLD(Ql(i,:),Qr(i,:),flx)
-         flux(i,:)  = flx(:)
+         if( flag_flux == 1 ) then 
+             call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx(:))
+         else if (flag_flux == 2) then
+            call HLL(Ql(:,i),Qr(:,i),flx)
+         else if (flag_flux == 3 ) then
+            call HLLD(Ql(:,i),Qr(:,i),flx)
+         endif
+         flux(:,i)  = flx(:)
       enddo
 
 
@@ -354,10 +378,12 @@ real(8) :: dQm, dQp, dQ
 !     (Rusanov) flux.
 !=============================================================
 subroutine Lax(dxdt,Ql,Qr,flx)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, NVAR, is, ie, Bx, gam
 implicit none
-real(8),intent(in)  :: Ql(:), Qr(:)
+real(8),intent(in)  :: Ql(NVAR), Qr(NVAR)
 real(8),intent(in)  :: dxdt
-real(8),intent(out) :: flx(:)
+real(8),intent(out) :: flx(NVAR)
 integer :: n
 real(8):: Ul(NVAR), Ur(NVAR)
 real(8):: Fl(NVAR), Fr(NVAR)
@@ -427,9 +453,11 @@ end subroutine Lax
 !   flx(:) Conservative flux (mass, momentum, energy)
 !=============================================================
 subroutine HLL(Ql,Qr,flx)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, NVAR, NFLX, is, ie, Bx, gam
 implicit none
-real(8),intent(in)::Ql(:), Qr(:)
-real(8),intent(out) :: flx(:)
+real(8),intent(in)::Ql(NVAR), Qr(NVAR)
+real(8),intent(out) :: flx(NFLX)
 real(8):: Ul(NFLX), Ur(NFLX)
 real(8):: Fl(NFLX), Fr(NFLX)
 real(8):: cfl,cfr
@@ -518,9 +546,11 @@ end subroutine HLL
 !   flx(:) Conservative flux (mass, momentum, energy)
 !=============================================================
 subroutine HLLD(Ql,Qr,flx)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, NVAR, NFLX, is, ie, Bx, gam
 implicit none
-real(8),intent(in)  ::Ql(:), Qr(:)
-real(8),intent(out) :: flx(:)
+real(8),intent(in)  :: Ql(NVAR), Qr(NVAR)
+real(8),intent(out) :: flx(NFLX)
 real(8):: Ul(NFLX), Ur(NFLX)
 real(8):: Ulst(NFLX), Urst(NFLX)
 real(8):: Uldst(NFLX), Urdst(NFLX)
@@ -737,14 +767,15 @@ end subroutine HLLD
 !   U(:,:) Conservative variables updated in-place (active zone i=is:ie).
 !=============================================================
 subroutine UpdateConsv( dt, xf, flux, U )
+use params, only : NVAR, is, ie
 implicit none
 real(8), intent(in)  :: flux(:,:), dt, xf(:)
 real(8), intent(out) :: U(:,:)
 integer::i,n
 
-      do n=1,NVAR
       do i=is,ie
-         U(i,n) = U(i,n) + dt*(- flux(i+1,n) + flux(i,n))/(xf(i+1)-xf(i)) 
+      do n=1,NVAR
+         U(n,i) = U(n,i) + dt*(- flux(n,i+1) + flux(n,i))/(xf(i+1)-xf(i)) 
       enddo
       enddo
 
@@ -768,10 +799,12 @@ end subroutine UpdateConsv
 !   With variable dt, consider using a "while (time >= next_output_time)" style
 !   to avoid missing outputs when the simulation time jumps over an output time.
 !=============================================================
-subroutine Output( flag, dirname, xv, Q )
+subroutine Output( time, flag, xv, Q )
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, is, ie, Bx, unitsnap, dirname
 implicit none
+real(8),       intent(in) :: time
 logical,       intent(in) :: flag
-character(20), intent(in) :: dirname 
 real(8),       intent(in) :: xv(:), Q(:,:)
 real(8), parameter:: dtsnap=5.0d-3
 integer::i
@@ -789,8 +822,8 @@ integer, save :: nsnap = 0
     open(unitsnap,file=filename,form='formatted',action="write")
     write(unitsnap,"(a2,f6.4)") "# ",time
     do i=is,ie
-          write(unitsnap,*) xv(i), Q(i,IDN), Q(i,IVX), Q(i,IVY), Q(i,IVZ), Q(i,IPR), Bx, &
-          Q(i,IBY), Q(i,IBZ)
+          write(unitsnap,*) xv(i), Q(IDN,i), Q(IVX,i), Q(IVY,i), Q(IVZ,i), Q(IPR,i), Bx, &
+          Q(IBY,i), Q(IBZ,i)
     enddo
     close(unitsnap)
 
@@ -813,20 +846,23 @@ end subroutine Output
 !   Q(:,:)   Primitive variables Q=(rho, v, p)
 !   U(:,:)   Conservative variables U=(rho, mom, E) (optional but useful)
 !=============================================================
-!subroutine RealtimeAnalysis(xf,xv,Q,phys_evo)
-!real(8), intent(in)  :: xf(:), xv(:), Q(:,:)
-!real(8), intent(out) :: phys_evo(:)
-!integer :: i
-!real(8) :: tmp
-!
-!      tmp = 0.0d0
-!      do i=is,ie
-!           tmp = tmp + 1.0d0
-!      enddo
-!      phys_evo(1) = tmp/dble(nx)
-!      
-!return
-!end subroutine
+subroutine RealtimeAnalysis(xv,Q,phys_evo)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, is, ie, Bx, gam, is, ie
+implicit none
+real(8), intent(in)  :: xv(:), Q(:,:)
+real(8), intent(out) :: phys_evo(:)
+integer :: i
+real(8) :: tmp
+
+      tmp = 0.0d0
+      do i=is,ie
+           tmp = tmp + Q(IDN,i)*Q(IPR,i)*xv(i)
+      enddo
+      phys_evo(1) = tmp/dble(ie-is+1)
+      
+return
+end subroutine
 !=============================================================
 ! AnalysisAfterSimu
 ! Description:
@@ -839,21 +875,21 @@ end subroutine Output
 !   xv(:)    Cell-center coordinates
 !   Q(:,:)   Final primitive variables Q=(rho, v, p)
 !   U(:,:)   Final conservative variables U=(rho, mom, E)
-!=============================================================
-!subroutine AnalysisAfterSimu(time,xf,xv,Q)
-!real(8), intent(in)  :: xf(:), xv(:), Q(:,:)
-!real(8), intent(in)  :: time
-!integer :: i
-!real(8) :: error
-!
-!      error = 0.0d0
-!      do i=is,ie
-!           error = error + 1.0d0
-!      enddo
-!      print*, nx, error
-!      
-!return
-!end subroutine
+!!=============================================================
+!!subroutine AnalysisAfterSimu(time,xf,xv,Q)
+!!real(8), intent(in)  :: xf(:), xv(:), Q(:,:)
+!!real(8), intent(in)  :: time
+!!integer :: i
+!!real(8) :: error
+!!
+!!      error = 0.0d0
+!!      do i=is,ie
+!!           error = error + 1.0d0
+!!      enddo
+!!      print*, nx, error
+!!      
+!!return
+!!end subroutine
 !=============================================================
 ! makedirs
 ! Description:
@@ -873,4 +909,3 @@ write(command, *) 'if [ ! -d ', trim(outdir), ' ]; then mkdir -p ', trim(outdir)
       call system(command)
 end subroutine makedirs
 
-end program main
