@@ -1,23 +1,19 @@
-!---------------------------------------------------------------------
-!     HLLD Riemann Solver
-!---------------------------------------------------------------------
-!     solve the HLL Riemann solver 
+!=============================================================
+! HLLD
+! Description:
+!   Compute the interface flux using the HLLD approximate Riemann solver for
+!   the 1D Euler equations.
 !
-!     Input: Ql, Qr: primitive variables containing the perpendicular B fields 
-!                    at the left and right states
-!            1D array (IDN, IVX, IVY, IVZ, IPR, IBperp1, IBperp2)
-!                                 |
-!                                 |
-!                           Ql    |    Qr
-!                                 |
-!                                -->
-!                                flx
+! Inputs:
+!   Ql(:)  Left primitive state  (rho, v, p)
+!   Qr(:)  Right primitive state (rho, v, p)
 !
-!     Input: b1    : magnetic field perpendicular to the initial discontinuity
-!
-!     Output: flx  : flux estimated at the initial discontinuity
-!            index: (IDN, IVX, IVY, IVZ, IPR, IBperp1, IBperp2)
-!---------------------------------------------------------------------
+! Output:
+!   flx(:) Conservative flux (mass, momentum, energy)
+! 
+! References
+!   Miyoshi and Kusano, J. Comput. Phys., 208, 315 (2005)
+!=============================================================
 subroutine HLLD(Ql,Qr,flx)
 implicit none
 real(8),intent(in)  ::Ql(:), Qr(:)
@@ -27,14 +23,12 @@ real(8):: Ul(NFLX), Ur(NFLX)
 real(8):: Ulst(NFLX), Urst(NFLX)
 real(8):: Uldst(NFLX), Urdst(NFLX)
 real(8):: Fl(NFLX), Fr(NFLX)
-real(8):: test(NFLX)
 real(8):: cfl,cfr
 real(8):: S0, S1, S2, S3, S4
 real(8):: pbl, pbr, ptotl, ptotr
 real(8) :: sqrtdl, sqrtdr, v_dot_B_stl, v_dot_B_str
 real(8) :: Ulst_d_inv, Urst_d_inv, sum_sqrtd_inv, tmp
 real(8) :: ptot_stl, ptot_str,ptot_st, Cl, Cr, Cml, Cmr, Cml_inv, Cmr_inv, bxsgn
-integer :: i, n
 
     pbl = 0.5d0*(Bx**2 + Ql(IBY)**2 + Ql(IBZ)**2)
     pbr = 0.5d0*(Bx**2 + Qr(IBY)**2 + Qr(IBZ)**2)
