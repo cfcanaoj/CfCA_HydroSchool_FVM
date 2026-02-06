@@ -10,7 +10,7 @@ module commons
   integer::ntime
   integer,parameter::ntimemax=100000
   real(8)::time,dt
-  real(8),parameter:: Coul=0.1d0
+  real(8),parameter:: cfl=0.1d0
   data time / 0.0d0 /
   real(8),parameter:: timemax=1.0d-10
   real(8),parameter:: dtout=timemax/100
@@ -71,9 +71,58 @@ module fluxmod
   integer,parameter:: merd=1,mfr1=2,mfr2=3,mfr3=4 &
        &            , mfru=mufru,mfrv=mufrv,mfrw=mufrw
   real(8),dimension(mradflx,in,jn,kn):: radnflux1,radnflux2,radnflux3
-  real(8),dimension(mradflx,in,jn,kn):: srcrad
+  logical,parameter::flagEdd=.false.
 
 end module fluxmod
+module closure
+  implicit none
+contains
+  real(8) function chi(f)
+    implicit none
+    real(8),intent(in)::f
+    !          chi = (3+4*f**2)/(5+2*sqrt(4-3*f**2))
+    chi  = ( 5.0d0 + 6.0d0*f**2 -2.0d0*f**3 + 6.0d0*f**4) /15.0d0
+    
+  end function chi
+  real(8) function chiovf(f)
+    implicit none
+    real(8),intent(in)::f
+    !          chiovf = (6*f*(3+4*f**2))/(sqrt(4-3*f**2)*(5+2*(4-3*f**2))**2) &
+    !             & +  (8*f)/(5+2*sqrt(4-3*f**2))
+    
+    chiovf  = (        12.0d0*f    -6.0d0*f**2 +24.0d0*f**3) /15.0d0
+    
+  end function chiovf
+  real(8) function finvchiovf(f)
+    implicit none
+    real(8),intent(in)::f
+    !          chiovf = (6*f*(3+4*f**2))/(sqrt(4-3*f**2)*(5+2*(4-3*f**2))**2) &
+    !             & +  (8*f)/(5+2*sqrt(4-3*f**2))
+    
+    finvchiovf  = (        12.0d0    -6.0d0*f +24.0d0*f**2) /15.0d0
+    
+  end function finvchiovf
+
+  subroutine lambdaPlusMinus(f,mu,lambdaPlus,lambdaMins)
+    implicit none
+    real(8),intent(in)::f,mu
+    real(8),intent(out)::lambdaPlus,lambdaMins
+    real(8)::lambdaPlusOne,lambdaMinsOne,lambdaPlusZer,lambdaMinsZer
+    lambdaPlusOne =  chiovf(f)/2 + 1.0/2*sqrt(chiovf(f)**2+4*(chi(f) - f* chiovf(f)))
+    lambdaMinsOne =  chiovf(f)/2 - 1.0/2*sqrt(chiovf(f)**2+4*(chi(f) - f* chiovf(f)))
+    lambdaPlusZer =  0.5d0*sqrt(2.0d0*(1-chi(f)) + finvchiovf(f)*(1+2*f**2-3*chi(f)) )
+    lambdaMinsZer = -0.5d0*sqrt(2.0d0*(1-chi(f)) + finvchiovf(f)*(1+2*f**2-3*chi(f)) )
+
+    if(mu > 0)then
+       lambdaPlus = lambdaPlusZer + abs(mu)*(lambdaPlusOne-lambdaPlusZer)
+       lambdaMins = lambdaMinsZer + abs(mu)*(lambdaMinsOne-lambdaMinsZer)
+    else
+       lambdaPlus = -(lambdaMinsZer + abs(mu)*(lambdaMinsOne-lambdaMinsZer))
+       lambdaMins = -(lambdaPlusZer + abs(mu)*(lambdaPlusOne-lambdaPlusZer))
+    endif
+
+  end subroutine lambdaPlusMinus
+end module closure
 
 program main
   use commons
@@ -94,9 +143,9 @@ program main
      if(mod(ntime,100) .eq. 0 ) write(6,*)ntime,time,dt,Erad(is,js,ks)
      call RadBoundaryCondition
      call StateRad
-     call SourceRad
      call RadFlux1
-     call UpdateRad
+     call UpdateRadAdvection
+     call UpdateRadSource
      time=time+dt
      call Output(force_off,flag_binary,dirname)
      if(time > timemax) exit mloop
@@ -132,8 +181,6 @@ subroutine GenerateGrid
       do k=ks,ke
       do j=js,je
       do i=1,in
-
-!          d(i,j,k) = 25.0   ! [g cm^-3]
           d(i,j,k) = 0.25   ! [g cm^-3]
       kappa(i,j,k) = 0.04   ! [cm^2/g]
        Elte(i,j,k) = 1.0d10 ! [erg/cm^3]
@@ -172,9 +219,9 @@ end subroutine GenerateProblem
       do i=1,mgn
           Erad(    is-i,j,k) = 1.0d20
           if(d(is-i,j,k) .gt. 1.0d0) then
-             Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)*cl/sqrt(3.0d0)
+             Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)/sqrt(3.0d0)
           else
-             Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)*cl*0.99
+             Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)*0.99
           endif
           Frad(ydir:zdir,  is-i,j,k) = 0.0d0
  
@@ -220,7 +267,7 @@ end subroutine GenerateProblem
       enddo
       enddo
 
-      dt = Coul * dtmin
+      dt = cfl * dtmin
 !      write(6,*)"dt",dt
       return
       end subroutine TimestepControl
@@ -327,200 +374,218 @@ end subroutine GenerateProblem
       return
       end subroutine HLLERAD
 
-      subroutine RadFlux1
-      use commons, only: is,ie,in,js,je,jn,ks,ke,kn
-      use fluxmod
-      use units
-      implicit none
-      integer::i,j,k
-      real(8),dimension(nrad):: dsv,dsvm,dsvp
-      real(8),dimension(nrad,in,jn,kn):: leftpr,rigtpr
-      real(8),dimension(2*mradflx+mradadd,in,jn,kn):: leftco,rigtco
-      real(8),dimension(2*mradflx+mradadd):: leftst,rigtst
-      real(8),dimension(mradflx):: nflux
-      real(8):: fsq,ffc,chi,pxx,pyy,pzz,pxy,pyz,pzx
-      real(8),parameter::tiny=1.0d-30
 
-      do k=ks,ke
-      do j=js,je
-      do i=is-1,ie+1
+subroutine RadFlux1
+  use commons, only: is,ie,js,je,ks,ke
+  use fluxmod
+  use units
+  use closure
+  implicit none
+  integer::i,j,k
+  real(8),dimension(nrad):: dsv,dsvm,dsvp
+  real(8),dimension(nrad):: Pleftc1,Pleftc2,Plefte
+  real(8),dimension(nrad):: Prigtc1,Prigtc2,Prigte
+  real(8),dimension(2*mradflx+mradadd):: leftco,rigtco
+  real(8),dimension(mradflx):: nflux
+  real(8):: fsq,ffc,pxx,pyy,pzz,pxy,pyz,pzx
+  real(8):: ff1,ff2,ff3
+  real(8):: chil,lp,lm
+  real(8),parameter::tiny=1.0d-30
 
-           dsvm(:) =                   radsvc(:,i,j,k)-radsvc(:,i-1,j,k)
-           dsvp(:) = radsvc(:,i+1,j,k)-radsvc(:,i,j,k)
+  do k=ks,ke
+  do j=js,je
+  do i=is,ie+1
 
-          call  vanLeer(dsvp,dsvm,dsv)
-         leftpr(:,i+1,j,k) = radsvc(:,i,j,k)+0.5d0*dsv(:)
-         rigtpr(:,i  ,j,k) = radsvc(:,i,j,k)-0.5d0*dsv(:)
-      enddo
-      enddo
-      enddo
+     Pleftc1(:) = radsvc(:,i-2,j,k)
+     Pleftc2(:) = radsvc(:,i-1,j,k)
+     Prigtc1(:) = radsvc(:,i  ,j,k)
+     Prigtc2(:) = radsvc(:,i+1,j,k)
 
-      do k=ks,ke
-      do j=js,je
-      do i=is,ie+1
-! left
-         fsq = (leftpr(nfr1,i,j,k)**2 +leftpr(nfr2,i,j,k)**2 +leftpr(nfr3,i,j,k)**2) ! dimensional
-         ffc = fsq/cl**2/leftpr(nerd,i,j,k)**2 ! non-dimensional
-         ffc = min(1.0,max(0.0,ffc))
-         chi = (3.0+4.0*ffc)/(5.0+2.0*sqrt(4.0-3.0*ffc))
-!         chi = 1.0d0/3.0 ! Eddington approximation
+! | Pleftc1   | Pleftc2 =>| Prigtc1   | Prigtc2   |
+!                     You are here (x1-interface at i)
 
-         leftco(mcsp,i,j,k) = (+1.0d0/sqrt(3.0d0)*(3.0*(1.0-chi)/2.0)+max(-1.0d0,min(1.0d0,leftco(nfr1,i,j,k)/sqrt(fsq+tiny)))*((3.0*chi-1.0)/2))
-         leftco(mcsm,i,j,k) = (-1.0d0/sqrt(3.0d0)*(3.0*(1.0-chi)/2.0)+max(-1.0d0,min(1.0d0,leftco(nfr1,i,j,k)/sqrt(fsq+tiny)))*((3.0*chi-1.0)/2))
-         leftco(mcsp,i,j,k) = cl*min(leftco(mcsp,i,j,k), 1.0d0)
-         leftco(mcsm,i,j,k) = cl*max(leftco(mcsm,i,j,k),-1.0d0)
+!====================
+! Left state (from i-1 cell)
+!====================
+     dsvm(:) = Pleftc2(:) - Pleftc1(:)
+     dsvp(:) = Prigtc1(:) - Pleftc2(:)
+     call vanLeer(dsvp,dsvm,dsv)
+     Plefte(:) = Pleftc2(:) + 0.5d0*dsv(:)
 
-         pxx = leftpr(nerd,i,j,k)*(1.0/3.0d0*(3.0*(1.0-chi)/2.0) +leftpr(nfr1,i,j,k)**2/(fsq+tiny)*((3.0*chi-1.0)/2.0))
-         pyy = leftpr(nerd,i,j,k)*(1.0/3.0d0*(3.0*(1.0-chi)/2.0) +leftpr(nfr2,i,j,k)**2/(fsq+tiny)*((3.0*chi-1.0)/2.0))
-         pzz = leftpr(nerd,i,j,k)*(1.0/3.0d0*(3.0*(1.0-chi)/2.0) +leftpr(nfr3,i,j,k)**2/(fsq+tiny)*((3.0*chi-1.0)/2.0))
-         pxy = leftpr(nerd,i,j,k)*leftpr(nfr1,i,j,k)*leftpr(nfr2,i,j,k)/(fsq+tiny)*((3.0*chi-1.0)/2)
-         pyz = leftpr(nerd,i,j,k)*leftpr(nfr2,i,j,k)*leftpr(nfr3,i,j,k)/(fsq+tiny)*((3.0*chi-1.0)/2)
-         pzx = leftpr(nerd,i,j,k)*leftpr(nfr3,i,j,k)*leftpr(nfr1,i,j,k)/(fsq+tiny)*((3.0*chi-1.0)/2)
+!====================
+! Right state (from i cell)
+!====================
+     dsvm(:) = Prigtc1(:) - Pleftc2(:)
+     dsvp(:) = Prigtc2(:) - Prigtc1(:)
+     call vanLeer(dsvp,dsvm,dsv)
+     Prigte(:) = Prigtc1(:) - 0.5d0*dsv(:)
 
-         leftco(muerd,i,j,k) = leftpr(nerd,i,j,k) ! E
-         leftco(mufru,i,j,k) = leftpr(nfr1,i,j,k) ! F_u
-         leftco(mufrv,i,j,k) = leftpr(nfr2,i,j,k) ! F_v
-         leftco(mufrw,i,j,k) = leftpr(nfr3,i,j,k) ! F_w
+!====================
+! Convert primitives -> conservative/flux + characteristic speeds (M1 closure)
+!====================
+! ----- left
+     fsq = (Plefte(nfr1)**2 +Plefte(nfr2)**2 +Plefte(nfr3)**2) ! (F/E/c)^2
+     ffc = min(1.0d0,max(tiny,sqrt(fsq)))
+     ff1 = min(1.0d0,max(-1.0d0,Plefte(nfr1)/ffc))
+     ff2 = min(1.0d0,max(-1.0d0,Plefte(nfr2)/ffc))
+     ff3 = min(1.0d0,max(-1.0d0,Plefte(nfr3)/ffc))
 
-         leftco(mferd,i,j,k) = leftpr(nfr1,i,j,k) ! F
-         leftco(mffru,i,j,k) = pxx*cl**2 ! P_u
-         leftco(mffrv,i,j,k) = pxy*cl**2 ! P_v
-         leftco(mffrw,i,j,k) = pzx*cl**2 ! P_w
+     chil = chi(ffc)
+     if(flagEdd) chil = 1.0d0/3.0d0
+     call lambdaPlusMinus(ffc,ff1,lp,lm)
 
-! right 
-         fsq = (rigtpr(nfr1,i,j,k)**2 +rigtpr(nfr2,i,j,k)**2 +rigtpr(nfr3,i,j,k)**2) ! dimensional
-         ffc = fsq/cl**2/rigtpr(nerd,i,j,k)**2 ! non-dimensional
-         ffc = min(1.0,max(0.0,ffc))
-         chi = (3.0+4.0*ffc)/(5.0+2.0*sqrt(4.0-3.0*ffc))
-!         chi = 1.0d0/3.0 ! Eddington approximation
+     leftco(mcsp) = min(lp+tiny, 1.0d0)
+     leftco(mcsm) = max(lm-tiny,-1.0d0)
 
-         rigtco(mcsp,i,j,k) = (+1.0d0/sqrt(3.0d0)*(3.0*(1.0-chi)/2.0)+max(-1.0d0,min(1.0d0,rigtco(nfr1,i,j,k)/sqrt(fsq+tiny)))*((3.0*chi-1.0)/2))
-         rigtco(mcsm,i,j,k) = (-1.0d0/sqrt(3.0d0)*(3.0*(1.0-chi)/2.0)+max(-1.0d0,min(1.0d0,rigtco(nfr1,i,j,k)/sqrt(fsq+tiny)))*((3.0*chi-1.0)/2))
-         rigtco(mcsp,i,j,k) = cl*min(rigtco(mcsp,i,j,k), 1.0d0)
-         rigtco(mcsm,i,j,k) = cl*max(rigtco(mcsm,i,j,k),-1.0d0)
+     pxx = 0.5d0*(1.0d0-chil) + ff1**2 *0.5d0*(3.0d0*chil-1.0d0)
+     pyy = 0.5d0*(1.0d0-chil) + ff2**2 *0.5d0*(3.0d0*chil-1.0d0)
+     pzz = 0.5d0*(1.0d0-chil) + ff3**2 *0.5d0*(3.0d0*chil-1.0d0)
+     pxy =                      ff1*ff2*0.5d0*(3.0d0*chil-1.0d0)
+     pyz =                      ff2*ff3*0.5d0*(3.0d0*chil-1.0d0)
+     pzx =                      ff3*ff1*0.5d0*(3.0d0*chil-1.0d0)
 
-         pxx = rigtpr(nerd,i,j,k)*(1.0/3.0d0*(3.0*(1.0-chi)/2.0) +rigtpr(nfr1,i,j,k)**2/(fsq+tiny)*((3.0*chi-1.0)/2.0))
-         pyy = rigtpr(nerd,i,j,k)*(1.0/3.0d0*(3.0*(1.0-chi)/2.0) +rigtpr(nfr2,i,j,k)**2/(fsq+tiny)*((3.0*chi-1.0)/2.0))
-         pzz = rigtpr(nerd,i,j,k)*(1.0/3.0d0*(3.0*(1.0-chi)/2.0) +rigtpr(nfr3,i,j,k)**2/(fsq+tiny)*((3.0*chi-1.0)/2.0))
-         pxy = rigtpr(nerd,i,j,k)*rigtpr(nfr1,i,j,k)*rigtpr(nfr2,i,j,k)/(fsq+tiny)*((3.0*chi-1.0)/2.0)
-         pyz = rigtpr(nerd,i,j,k)*rigtpr(nfr2,i,j,k)*rigtpr(nfr3,i,j,k)/(fsq+tiny)*((3.0*chi-1.0)/2.0)
-         pzx = rigtpr(nerd,i,j,k)*rigtpr(nfr3,i,j,k)*rigtpr(nfr1,i,j,k)/(fsq+tiny)*((3.0*chi-1.0)/2.0)
+     leftco(muerd) =              Plefte(nerd) ! E
+     leftco(mufru) = Plefte(nfr1)*Plefte(nerd) ! F_u
+     leftco(mufrv) = Plefte(nfr2)*Plefte(nerd) ! F_v
+     leftco(mufrw) = Plefte(nfr3)*Plefte(nerd) ! F_w
 
-         rigtco(muerd,i,j,k) = rigtpr(nerd,i,j,k) ! E
-         rigtco(mufru,i,j,k) = rigtpr(nfr1,i,j,k) ! F_u
-         rigtco(mufrv,i,j,k) = rigtpr(nfr2,i,j,k) ! F_v
-         rigtco(mufrw,i,j,k) = rigtpr(nfr3,i,j,k) ! F_w
+     leftco(mferd) = Plefte(nfr1)*Plefte(nerd) ! F
+     leftco(mffru) =          pxx*Plefte(nerd) ! P_u
+     leftco(mffrv) =          pxy*Plefte(nerd) ! P_v
+     leftco(mffrw) =          pzx*Plefte(nerd) ! P_w
 
-         rigtco(mferd,i,j,k) = rigtpr(nfr1,i,j,k) ! F
-         rigtco(mffru,i,j,k) = pxx*cl**2 ! P_u
-         rigtco(mffrv,i,j,k) = pxy*cl**2 ! P_v
-         rigtco(mffrw,i,j,k) = pzx*cl**2 ! P_w
+! ----- right
+     fsq = (Prigte(nfr1)**2 +Prigte(nfr2)**2 +Prigte(nfr3)**2) ! (F/E/c)^2
+     ffc = min(1.0d0,max(tiny,sqrt(fsq)))
+     ff1 = min(1.0d0,max(-1.0d0,Prigte(nfr1)/ffc))
+     ff2 = min(1.0d0,max(-1.0d0,Prigte(nfr2)/ffc))
+     ff3 = min(1.0d0,max(-1.0d0,Prigte(nfr3)/ffc))
 
-!         if(i .eq. is) print *, rigtco(muerd,i,j,k), leftco(muerd,i,j,k)
-      enddo
-      enddo
-      enddo
+     chil = chi(ffc)
+     if(flagEdd) chil = 1.0d0/3.0d0
+     call lambdaPlusMinus(ffc,ff1,lp,lm)
 
-      do k=ks,ke
-      do j=js,je
-      do i=is,ie+1
-         leftst(:)=leftco(:,i,j,k)
-         rigtst(:)=rigtco(:,i,j,k)
- !        if(i .eq. is) print *, rigtst(merd), leftst(merd)
-         call HLLERAD(leftst,rigtst,nflux)
-         radnflux1(merd,i,j,k)=nflux(merd)
-         radnflux1(mfr1,i,j,k)=nflux(mfru)
-         radnflux1(mfr2,i,j,k)=nflux(mfrv)
-         radnflux1(mfr3,i,j,k)=nflux(mfrw)
-  !       if(i .eq. is) print *, radnflux1(merd,i,j,k)
-  !       stop
-      enddo
-      enddo
-      enddo
+     rigtco(mcsp) = min(lp+tiny, 1.0d0)
+     rigtco(mcsm) = max(lm-tiny,-1.0d0)
 
-      return
-      end subroutine Radflux1
+     pxx = 0.5d0*(1.0d0-chil) + ff1**2 *0.5d0*(3.0d0*chil-1.0d0)
+     pyy = 0.5d0*(1.0d0-chil) + ff2**2 *0.5d0*(3.0d0*chil-1.0d0)
+     pzz = 0.5d0*(1.0d0-chil) + ff3**2 *0.5d0*(3.0d0*chil-1.0d0)
+     pxy =                      ff1*ff2*0.5d0*(3.0d0*chil-1.0d0)
+     pyz =                      ff2*ff3*0.5d0*(3.0d0*chil-1.0d0)
+     pzx =                      ff3*ff1*0.5d0*(3.0d0*chil-1.0d0)
 
-      subroutine SourceRad
-      use commons
-      use fluxmod
-      implicit none
-      integer::i,j,k
-      real(8)::pi
-      real(8)::alpha
+     rigtco(muerd) =              Prigte(nerd) ! E
+     rigtco(mufru) = Prigte(nfr1)*Prigte(nerd) ! F_u
+     rigtco(mufrv) = Prigte(nfr2)*Prigte(nerd) ! F_v
+     rigtco(mufrw) = Prigte(nfr3)*Prigte(nerd) ! F_w
 
-      pi = acos(-1.0d0)
+     rigtco(mferd) = Prigte(nfr1)*Prigte(nerd) ! F
+     rigtco(mffru) =          pxx*Prigte(nerd) ! P_u
+     rigtco(mffrv) =          pxy*Prigte(nerd) ! P_v
+     rigtco(mffrw) =          pzx*Prigte(nerd) ! P_w
 
-      do k=ks,ke
-      do j=js,je
-      do i=is,ie
-         alpha = d(i,j,k)*kappa(i,j,k)*cl*dt
-         srcrad(merd,i,j,k) = (Elte(i,j,k)-Erad(i,j,k))*alpha/(1+alpha)/dt
-         srcrad(mfr1,i,j,k) =  -alpha/(1.0d0+alpha)/dt*Frad(xdir,i,j,k)
-         srcrad(mfr2,i,j,k) =  -alpha/(1.0d0+alpha)/dt*Frad(ydir,i,j,k)
-         srcrad(mfr3,i,j,k)=   -alpha/(1.0d0+alpha)/dt*Frad(zdir,i,j,k)
+!====================
+! Riemann solver
+!====================
+     call HLLERAD(leftco,rigtco,nflux)
+     radnflux1(merd,i,j,k) = nflux(merd)
+     radnflux1(mfr1,i,j,k) = nflux(mfru)
+     radnflux1(mfr2,i,j,k) = nflux(mfrv)
+     radnflux1(mfr3,i,j,k) = nflux(mfrw)
 
-      enddo
-      enddo
-      enddo
+  enddo
+  enddo
+  enddo
+  return
+end subroutine Radflux1
 
-      return
-      end subroutine SourceRad
+subroutine UpdateRadSource
+  use commons
+  use fluxmod
+  implicit none
+  integer::i,j,k
+  real(8)::pi
+  real(8)::alpha
+  real(8)::fnl,flm
+  
+  pi = acos(-1.0d0)
+  
+  do k=ks,ke
+  do j=js,je
+  do i=is,ie
+     alpha = d(i,j,k)*kappa(i,j,k)*cl*dt
+     Erad(i,j,k) = (Erad(i,j,k) + alpha*Elte(i,j,k))/(1+alpha)
+     Frad(xdir,i,j,k) = Frad(xdir,i,j,k)/(1.0d0+alpha)
+     Frad(ydir,i,j,k) = Frad(ydir,i,j,k)/(1.0d0+alpha)
+     Frad(zdir,i,j,k) = Frad(zdir,i,j,k)/(1.0d0+alpha) 
+     
+     Erad(i,j,k) =  max(Erad(i,j,k),Elte(i,j,k))
 
-      subroutine UpdateRad
-      use commons
-      use fluxmod
-      implicit none
-      real(8)::fnl,flm
-      integer::i,j,k
+     fnl = sqrt(Frad(xdir,i,j,k)**2 +Frad(ydir,i,j,k)**2 +Frad(zdir,i,j,k)**2)
+     flm =  0.99*Erad(i,j,k)
+     if(fnl .gt. flm )then
+        Frad(xdir,i,j,k) =  Frad(xdir,i,j,k)*flm/fnl
+        Frad(ydir,i,j,k) =  Frad(ydir,i,j,k)*flm/fnl
+        Frad(zdir,i,j,k) =  Frad(zdir,i,j,k)*flm/fnl
+     endif
+  enddo
+  enddo
+  enddo
 
-      do k=ks,ke
-      do j=js,je
-      do i=is,ie
+  return
+end subroutine UpdateRadSource
+
+subroutine UpdateRadAdvection
+  use commons
+  use fluxmod
+  implicit none
+  real(8)::fnl,flm
+  integer::i,j,k
+
+  do k=ks,ke
+  do j=js,je
+  do i=is,ie
          
          Erad(i,j,k) = Erad(i,j,k)                    &
-     & +dt*(                                          &
+     & +dt*cl*(                                          &
      & +(- radnflux1(merd,i+1,j,k)                    &
      &   + radnflux1(merd,i  ,j,k))/(x1a(i+1)-x1a(i)) &
-     &   +srcrad(merd,i,j,k)                          &
      &      )
 
          Frad(xdir,i,j,k) = Frad(xdir,i,j,k)          &
-     & +dt*(                                          &
+     & +dt*cl*(                                          &
      & +(- radnflux1(mfr1,i+1,j,k)                    &
      &   + radnflux1(mfr1,i  ,j,k))/(x1a(i+1)-x1a(i)) &
-     &   + srcrad(mfr1,i,j,k)                         &
      &      )
 
          Frad(ydir,i,j,k) = Frad(ydir,i,j,k)          &
-     & +dt*(                                          &
+     & +dt*cl*(                                          &
      & +(- radnflux1(mfr2,i+1,j,k)                    &
      &   + radnflux1(mfr2,i  ,j,k))/(x1a(i+1)-x1a(i)) &
-     &   + srcrad(mfr2,i,j,k)                         &
      &      )
 
          Frad(zdir,i,j,k) = Frad(zdir,i,j,k)          &
-     & +dt*(                                          &
+     & +dt*cl*(                                          &
      & +(- radnflux1(mfr3,i+1,j,k)                    &
      &   + radnflux1(mfr3,i  ,j,k))/(x1a(i+1)-x1a(i)) &
-     &   + srcrad(mfr3,i,j,k)                         &
      &      )
 
          Erad(i,j,k) =  max(Erad(i,j,k),Elte(i,j,k))
 
          fnl = sqrt(Frad(xdir,i,j,k)**2 +Frad(ydir,i,j,k)**2 +Frad(zdir,i,j,k)**2) ! dimensional
-         flm =  0.99*Erad(i,j,k)*cl
-         if(fnl/cl .gt. flm )then
+         flm =  0.99*Erad(i,j,k)
+         if(fnl .gt. flm )then
             Frad(xdir,i,j,k) =  Frad(xdir,i,j,k)*flm/fnl
             Frad(ydir,i,j,k) =  Frad(ydir,i,j,k)*flm/fnl
             Frad(zdir,i,j,k) =  Frad(zdir,i,j,k)*flm/fnl
          endif
-      enddo
-      enddo
-      enddo
+  enddo
+  enddo
+  enddo
 
-      return
-      end subroutine UpdateRad
+  return
+end subroutine UpdateRadAdvection
     
       subroutine Output(flag_force,flag_binary,dirname)
       use commons
@@ -532,7 +597,7 @@ end subroutine GenerateProblem
       character(40)::filename
       real(8),save::tout
       data tout / 0.0d0 /
-      integer::nout
+      integer,save::nout
       data nout / 1 /
       integer:: unitasc, unitbin
       integer,parameter:: gs=1
