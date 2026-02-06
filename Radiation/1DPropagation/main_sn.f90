@@ -24,11 +24,10 @@ end module constants
 
 module modelpara
   implicit none
-  real(8),parameter:: rho0=1.0d0,rho1=1.0d3 ! [g/cm^3]
+  real(8),parameter:: rho0=1.0d0! [g/cm^3]
   real(8),parameter:: kap0=0.1d0! [cm^2/g]
-  real(8),parameter:: tempRad=1740 ! [K]
-  real(8),parameter:: tempMed=290! [K]
-  real(8),parameter:: Cv=20.79! [erg/cm^3/K]
+  real(8),parameter:: erad0=1.0d10! [erg/cm^3]
+  real(8),parameter:: erad1=1.0d20! [erg/cm^3]
 end module modelpara
 
 module weno5
@@ -185,8 +184,8 @@ contains
       do k=ks,ke
       do j=js,je
       do i=1,in
-          d(i,j,k) = 0.25   ! [g cm^-3]
-      kappa(i,j,k) = 0.04   ! [cm^2/g]
+          d(i,j,k) = rho0   ! [g cm^-3]
+      kappa(i,j,k) = kap0   ! [cm^2/g]
       enddo
       enddo
       enddo
@@ -196,8 +195,8 @@ contains
     do j=js,je
     do i=is,ie
         do m=1,mang
-           fdis(m,i,j,k) = 1.0d10/dth(m)
-           flte(m,i,j,k) = 1.0d10/dth(m) ! [erg/cm^3]
+           fdis(m,i,j,k) = erad0/dth(m)
+           flte(m,i,j,k) = erad0/dth(m) ! [erg/cm^3]
        enddo
     enddo
     enddo

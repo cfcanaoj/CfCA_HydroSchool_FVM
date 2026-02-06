@@ -3,6 +3,14 @@ module units
   real(8),parameter::cl=3.0d10 ! cm/s
 end module units
 
+module modelpara
+  implicit none
+  real(8),parameter:: rho0=0.25d0! [g/cm^3]
+  real(8),parameter:: kap0=0.04d0! [cm^2/g]
+  real(8),parameter:: erad0=1.0d10! [erg/cm^3]
+  real(8),parameter:: erad1=1.0d20! [erg/cm^3]
+end module modelpara
+
 module commons
   use units
   implicit none
@@ -175,15 +183,16 @@ subroutine GenerateGrid
       subroutine GenerateProblem
       use commons
       use eosmod
+      use modelpara
       implicit none
       integer::i,j,k
       
       do k=ks,ke
       do j=js,je
       do i=1,in
-          d(i,j,k) = 0.25   ! [g cm^-3]
-      kappa(i,j,k) = 0.04   ! [cm^2/g]
-       Elte(i,j,k) = 1.0d10 ! [erg/cm^3]
+          d(i,j,k) = rho0   ! [g cm^-3]
+      kappa(i,j,k) = kap0   ! [cm^2/g]
+       Elte(i,j,k) = erad0 ! [erg/cm^3]
 
       enddo
       enddo
@@ -193,7 +202,7 @@ subroutine GenerateGrid
       do j=js,je
       do i=1,in
 
-       Erad(  i,j,k) = 1.0d10
+       Erad(  i,j,k) = erad0
        Frad(xdir,i,j,k) = 0.0d0
        Frad(ydir,i,j,k) = 0.0d0
        Frad(zdir,i,j,k) = 0.0d0
@@ -210,14 +219,15 @@ end subroutine GenerateProblem
 
 
       subroutine RadBoundaryCondition
-      use commons
+        use commons
+        use modelpara
       implicit none
       integer::i,j,k
 
       do k=ks,ke
       do j=js,je
       do i=1,mgn
-          Erad(    is-i,j,k) = 1.0d20
+          Erad(    is-i,j,k) = erad1
           if(d(is-i,j,k) .gt. 1.0d0) then
              Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)/sqrt(3.0d0)
           else
