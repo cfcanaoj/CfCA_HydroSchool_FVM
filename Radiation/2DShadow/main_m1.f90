@@ -6,10 +6,11 @@ end module units
 
 module modelpara
   implicit none
-  real(8),parameter::rho0=1.0d0,rho1=1.0d3 ! [g/cm^3]
-  real(8),parameter::tempRad=1740 ! [K]
-  real(8),parameter::tempMed=290! [K]
-  real(8),parameter::Cv=20.79! [erg/cm^3/K]
+  real(8),parameter:: rho0=1.0d0,rho1=1.0d3 ! [g/cm^3]
+  real(8),parameter:: kap0=0.1d0! [cm^2/g]
+  real(8),parameter:: tempRad=1740 ! [K]
+  real(8),parameter:: tempMed=290! [K]
+  real(8),parameter:: Cv=20.79! [erg/cm^3/K]
 end module modelpara
 
 module commons
@@ -80,7 +81,6 @@ module fluxmod
   integer,parameter:: merd=1,mfr1=2,mfr2=3,mfr3=4 &
  &                  , mfru=mufru,mfrv=mufrv,mfrw=mufrw
   real(8),dimension(mradflx,in,jn,kn):: radnflux1,radnflux2,radnflux3
-  real(8),dimension(mradflx,in,jn,kn):: srcrad
   logical,parameter::flagEdd=.false.
   real(8),parameter::fluxfactormax=0.9d0
 
@@ -155,7 +155,10 @@ program main
   write(6,*)"step","time","dt"
   mloop: do ntime=1,ntimemax
      call TimestepControl
-     if(mod(ntime,100) .eq. 0 ) write(6,*)ntime,time,dt
+     if(mod(ntime,100) .eq. 0 ) then
+        print *, "step=",ntime," time=",time," dt=",dt
+        call flush(6)
+     endif
      call RadBoundaryCondition
      call StateRad
      call RadFlux1
@@ -213,7 +216,7 @@ subroutine GenerateProblem
      tempK(i,j,k) = tempMed
      delta = 10.0d0*(((x1b(i)-0.5)/0.1)**2+((x2b(j)-0.0)/0.06)**2-1.0d0)
           d(i,j,k) = rho0 + (rho1 - rho0)/(1+exp(delta))  ! [g cm^-3]
-      kappa(i,j,k) = 0.1 *(tempK(i,j,k)/tempMed)**(-3.5d0) &
+      kappa(i,j,k) = kap0 *(tempK(i,j,k)/tempMed)**(-3.5d0) &
     &                    *(    d(i,j,k)/rho0   )**2/d(i,j,k)    ! [cm^2/g]
 
      ei(i,j,k)   = d(i,j,k)*Cv*tempK(i,j,k)
@@ -702,7 +705,7 @@ subroutine UpdateRadSource
   do k=ks,ke
   do j=js,je
   do i=is,ie   
-         kappa(i,j,k) = 0.1 *(tempK(i,j,k)/tempMed)**(-3.5) &
+         kappa(i,j,k) = kap0 *(tempK(i,j,k)/tempMed)**(-3.5) &
     &                       *(    d(i,j,k)/rho0   )**2/d(i,j,k)    ! [cm^2/g]
          Elte(i,j,k) = arad*(tempK(i,j,k))**4 ! [erg/cm^3]
 
@@ -800,7 +803,7 @@ end subroutine UpdateRadAdvection
       integer,parameter:: nvar=6
       real(8)::x1out(is-gs:ie+gs,2)
       real(8)::x2out(js-gs:je+gs,2)
-      real(8)::radout(is-gs:ie+gs,js-gs:je+gs,ks,nvar)
+      real(4)::radout(is-gs:ie+gs,js-gs:je+gs,ks,nvar)
 
       logical, save:: is_inited
       data is_inited /.false./
@@ -815,22 +818,26 @@ end subroutine UpdateRadAdvection
       
       if (flag_binary) then
 
-         x1out(is-gs:ie+gs,1) = x1b(is-gs:ie+gs)
-         x1out(is-gs:ie+gs,2) = x1a(is-gs:ie+gs)
+         x1out(is:ie,1) = x1b(is:ie)
+         x1out(is:ie,2) = x1a(is:ie)
          
-         x2out(js-gs:je+gs,1) = x2b(js-gs:je+gs)
-         x2out(js-gs:je+gs,2) = x2a(js-gs:je+gs)
+         x2out(js:je,1) = x2b(js:je)
+         x2out(js:je,2) = x2a(js:je)
          
-         radout(is-gs:ie+gs,js-gs:je+gs,ks,1) = Erad(  is-gs:ie+gs,js-gs:je+gs,ks)
-         radout(is-gs:ie+gs,js-gs:je+gs,ks,2) = Frad(1,is-gs:ie+gs,js-gs:je+gs,ks)
-         radout(is-gs:ie+gs,js-gs:je+gs,ks,3) = Frad(2,is-gs:ie+gs,js-gs:je+gs,ks)
-         radout(is-gs:ie+gs,js-gs:je+gs,ks,4) = Frad(3,is-gs:ie+gs,js-gs:je+gs,ks)
-         radout(is-gs:ie+gs,js-gs:je+gs,ks,5) =    d(  is-gs:ie+gs,js-gs:je+gs,ks)
-         radout(is-gs:ie+gs,js-gs:je+gs,ks,6) =   ei(  is-gs:ie+gs,js-gs:je+gs,ks)
+         radout(is:ie,js:je,ks,1) = Erad(  is:ie,js:je,ks)
+         radout(is:ie,js:je,ks,2) = Frad(1,is:ie,js:je,ks)
+         radout(is:ie,js:je,ks,3) = Frad(2,is:ie,js:je,ks)
+         radout(is:ie,js:je,ks,4) = Frad(3,is:ie,js:je,ks)
+         radout(is:ie,js:je,ks,5) =    d(  is:ie,js:je,ks)
+         radout(is:ie,js:je,ks,6) =   ei(  is:ie,js:je,ks)
      
          write(filename,'(a4,i5.5,a4)')"snap",nout,".bin"
          filename = trim(dirname)//filename
-         open(newunit=unitbin,file=filename,status='replace',form='unformatted',access="stream",action="write") 
+         open(newunit=unitbin,file=filename,status='replace',form='unformatted',access="stream",action="write")
+         write(unitbin) time
+         write(unitbin) izones
+         write(unitbin) jzones
+         write(unitbin) 6
          write(unitbin) x1out(:,:)
          write(unitbin) x2out(:,:)
          write(unitbin) radout(:,:,:,:)
@@ -841,12 +848,13 @@ end subroutine UpdateRadAdvection
          filename = trim(dirname)//filename
          open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write") 
          write(unitasc,"(a1,(1x,(A)),(1x,1PE15.4))") "#","time=",time
-         write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","nx=", izones+2*gs
-         write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","ny=", jzones+2*gs
+         write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","nx=", izones
+         write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","ny=", jzones
+         write(unitasc,"(a1,(A))") "#"," x y E Fx Fy"
          k=ks
-         do j=js-gs,je+gs
-         do i=is-gs,ie+gs
-            write(unitasc,*) x1b(i),Erad(i,j,k),Erad(i,j,k),Frad(xdir,i,j,k)
+         do j=js,je
+         do i=is,ie
+            write(unitasc,"(1x,5(1x,E15.6e3))") x1b(i),x2b(j),Erad(i,j,k),Frad(xdir,i,j,k),Frad(ydir,i,j,k)
          enddo
             write(unitasc,*)
          enddo
