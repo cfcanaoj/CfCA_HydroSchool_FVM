@@ -20,7 +20,7 @@ module commons
   integer::ntime
   integer,parameter::ntimemax=100000
   real(8)::time,dt
-  real(8),parameter:: Coul=0.1d0
+  real(8),parameter:: cfl=0.1d0
   data time / 0.0d0 /
   real(8),parameter:: timemax=1.0d-10
   real(8),parameter:: dtout=timemax/100
@@ -328,7 +328,7 @@ subroutine TimestepControl
   enddo
   enddo
 
-  dt = Coul * dtmin
+  dt = cfl * dtmin
 !      write(6,*)"dt",dt
   return
 end subroutine TimestepControl
