@@ -143,9 +143,13 @@ end module closure
 program main
   use commons
   implicit none
+  character(20),parameter:: dirname="m1/"
+  logical :: flag_binary = .false.
+  logical,parameter:: force_on = .true.,force_off = .false.
   write(6,*) "setup grids and fields"
   call GenerateGrid
   call GenerateProblem
+  call Output(force_on,flag_binary,dirname)
   write(6,*) "entering main loop"
 ! main loop
   write(6,*)"step","time","dt"
@@ -159,10 +163,10 @@ program main
      call UpdateRadAdvection
      call UpdateRadSource
      time=time+dt
-     call Output
+     call Output(force_off,flag_binary,dirname)
      if(time > timemax) exit mloop
   enddo mloop
-
+  call Output(force_on,flag_binary,dirname)
   write(6,*) "program has been finished"
 end program main
 
@@ -779,18 +783,19 @@ subroutine UpdateRadAdvection
   return
 end subroutine UpdateRadAdvection
 
-      subroutine Output
+      subroutine Output(flag_force,flag_binary,dirname)
       use commons
       implicit none
+      logical,intent(in):: flag_force
+      logical,intent(in):: flag_binary
+      character(len=*),intent(in):: dirname
       integer::i,j,k
-      character(20),parameter::dirname="bindata/"
       character(40)::filename
       real(8),save::tout
       data tout / 0.0d0 /
-      integer::nout
+      integer,save::nout
       data nout / 1 /
-      integer,parameter:: unitout=17
-      integer,parameter:: unitbin=13
+      integer:: unitasc, unitbin
       integer,parameter:: gs=1
       integer,parameter:: nvar=6
       real(8)::x1out(is-gs:ie+gs,2)
@@ -801,43 +806,52 @@ end subroutine UpdateRadAdvection
       data is_inited /.false./
 
       if (.not. is_inited) then
-         call makedirs("bindata")
+         call makedirs(dirname)
          is_inited =.true.
       endif
 
-      if(time .lt. tout+dtout) return
 
-      write(filename,'(a3,i5.5,a4)')"unf",nout,".dat"
-      filename = trim(dirname)//filename
+      if(.not. flag_force .and. time < tout+dtout) return
+      
+      if (flag_binary) then
 
-      open(unitout,file=filename,status='replace',form='formatted')
-      write(unitout,*) "# ",time,dt
-      write(unitout,*) "# ",izones,gs
-      write(unitout,*) "# ",jzones,gs
-!      write(unitout,*) "# ",denup,dendn
-      close(unitout)
+         x1out(is-gs:ie+gs,1) = x1b(is-gs:ie+gs)
+         x1out(is-gs:ie+gs,2) = x1a(is-gs:ie+gs)
+         
+         x2out(js-gs:je+gs,1) = x2b(js-gs:je+gs)
+         x2out(js-gs:je+gs,2) = x2a(js-gs:je+gs)
+         
+         radout(is-gs:ie+gs,js-gs:je+gs,ks,1) = Erad(  is-gs:ie+gs,js-gs:je+gs,ks)
+         radout(is-gs:ie+gs,js-gs:je+gs,ks,2) = Frad(1,is-gs:ie+gs,js-gs:je+gs,ks)
+         radout(is-gs:ie+gs,js-gs:je+gs,ks,3) = Frad(2,is-gs:ie+gs,js-gs:je+gs,ks)
+         radout(is-gs:ie+gs,js-gs:je+gs,ks,4) = Frad(3,is-gs:ie+gs,js-gs:je+gs,ks)
+         radout(is-gs:ie+gs,js-gs:je+gs,ks,5) =    d(  is-gs:ie+gs,js-gs:je+gs,ks)
+         radout(is-gs:ie+gs,js-gs:je+gs,ks,6) =   ei(  is-gs:ie+gs,js-gs:je+gs,ks)
+     
+         write(filename,'(a4,i5.5,a4)')"snap",nout,".bin"
+         filename = trim(dirname)//filename
+         open(newunit=unitbin,file=filename,status='replace',form='unformatted',access="stream",action="write") 
+         write(unitbin) x1out(:,:)
+         write(unitbin) x2out(:,:)
+         write(unitbin) radout(:,:,:,:)
+         close(unitbin)
+      else
 
-      x1out(is-gs:ie+gs,1) = x1b(is-gs:ie+gs)
-      x1out(is-gs:ie+gs,2) = x1a(is-gs:ie+gs)
-
-      x2out(js-gs:je+gs,1) = x2b(js-gs:je+gs)
-      x2out(js-gs:je+gs,2) = x2a(js-gs:je+gs)
-
-      radout(is-gs:ie+gs,js-gs:je+gs,ks,1) = Erad(  is-gs:ie+gs,js-gs:je+gs,ks)
-      radout(is-gs:ie+gs,js-gs:je+gs,ks,2) = Frad(1,is-gs:ie+gs,js-gs:je+gs,ks)
-      radout(is-gs:ie+gs,js-gs:je+gs,ks,3) = Frad(2,is-gs:ie+gs,js-gs:je+gs,ks)
-      radout(is-gs:ie+gs,js-gs:je+gs,ks,4) = Frad(3,is-gs:ie+gs,js-gs:je+gs,ks)
-      radout(is-gs:ie+gs,js-gs:je+gs,ks,5) =    d(  is-gs:ie+gs,js-gs:je+gs,ks)
-      radout(is-gs:ie+gs,js-gs:je+gs,ks,6) =   ei(  is-gs:ie+gs,js-gs:je+gs,ks)
-
-      write(filename,'(a3,i5.5,a4)')"bin",nout,".dat"
-      filename = trim(dirname)//filename
-      open(unitbin,file=filename,status='replace',form='binary') 
-      write(unitbin) x1out(:,:)
-      write(unitbin) x2out(:,:)
-      write(unitbin) radout(:,:,:,:)
-      close(unitbin)
-
+         write(filename,'(a4,i5.5,a4)')"snap",nout,".dat"
+         filename = trim(dirname)//filename
+         open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write") 
+         write(unitasc,"(a1,(1x,(A)),(1x,1PE15.4))") "#","time=",time
+         write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","nx=", izones+2*gs
+         write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","ny=", jzones+2*gs
+         k=ks
+         do j=js-gs,je+gs
+         do i=is-gs,ie+gs
+            write(unitasc,*) x1b(i),Erad(i,j,k),Erad(i,j,k),Frad(xdir,i,j,k)
+         enddo
+            write(unitasc,*)
+         enddo
+         close(unitasc)
+      endif
       write(6,*) "output:",nout,time
 
       nout=nout+1
