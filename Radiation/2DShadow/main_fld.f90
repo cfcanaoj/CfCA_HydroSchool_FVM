@@ -7,6 +7,7 @@ end module units
 module modelpara
   implicit none
   real(8),parameter::rho0=1.0d0,rho1=1.0d3 ! [g/cm^3]
+  real(8),parameter:: kap0=0.1d0! [cm^2/g]
   real(8),parameter::tempRad=1740 ! [K]
   real(8),parameter::tempMed=290! [K]
   real(8),parameter::Cv=20.79! [erg/cm^3/K]
