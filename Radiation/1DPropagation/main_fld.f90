@@ -186,7 +186,7 @@ subroutine RadBoundaryCondition
   do j=js,je
   do i=1,mgn
      Erad(    is-i,j,k) = erad1
-     Frad(1,  is-i,j,k) = Erad(    is-i,j,k)*cl/sqrt(3.0d0)
+     Frad(1,  is-i,j,k) = Erad(    is-i,j,k)/sqrt(3.0d0)
      Frad(2:3,  is-i,j,k) = 0.0d0
   enddo
   enddo
@@ -279,11 +279,11 @@ subroutine RadFlux1
      lambda = (2.0+Rfc)/(6+3*Rfc+Rfc**2)
      LFLD1(i,j,k) = lambda
      radnflux1(merd,i,j,k)= -(Erad(i,j,k)-Erad(i-1,j,k))/(x1b(i)-x1b(i-1)) &
-          & /(d(i,j,k)*kappa(i,j,k)+d(i-1,j,k)*kappa(i-1,j,k))*2.0d0*lambda*cl
+          & /(d(i,j,k)*kappa(i,j,k)+d(i-1,j,k)*kappa(i-1,j,k))*2.0d0*lambda
      if( radnflux1(merd,i,j,k) .ge. 0)then
-        radnflux1(merd,i,j,k) = min(radnflux1(merd,i,j,k), cl*Erad(i-1,j,k))
+        radnflux1(merd,i,j,k) = min(radnflux1(merd,i,j,k), Erad(i-1,j,k))
      else
-        radnflux1(merd,i,j,k) = max(radnflux1(merd,i,j,k),-cl*Erad(i  ,j,k))
+        radnflux1(merd,i,j,k) = max(radnflux1(merd,i,j,k),-Erad(i  ,j,k))
      endif
 
   enddo
@@ -308,10 +308,10 @@ subroutine SourceRad
   do j=js,je
   do i=is,ie
      alpha = d(i,j,k)*kappa(i,j,k)*cl*dt
-     srcrad(merd,i,j,k) = (Elte(i,j,k)-Erad(i,j,k))*alpha/(1+alpha)/dt
-     srcrad(mfr1,i,j,k) =  -alpha/(1.0d0+alpha)/dt*Frad(1,i,j,k)
-     srcrad(mfr2,i,j,k) =  -alpha/(1.0d0+alpha)/dt*Frad(2,i,j,k)
-     srcrad(mfr3,i,j,k)=   -alpha/(1.0d0+alpha)/dt*Frad(3,i,j,k)
+     srcrad(merd,i,j,k) = (Elte(i,j,k)-Erad(i,j,k))*alpha/(1+alpha)/dt/cl
+     srcrad(mfr1,i,j,k) =  -alpha/(1.0d0+alpha)/dt*Frad(1,i,j,k)/cl
+     srcrad(mfr2,i,j,k) =  -alpha/(1.0d0+alpha)/dt*Frad(2,i,j,k)/cl
+     srcrad(mfr3,i,j,k)=   -alpha/(1.0d0+alpha)/dt*Frad(3,i,j,k)/cl
 
   enddo
   enddo
@@ -331,7 +331,7 @@ subroutine UpdateRad
   do i=is,ie
          
          Erad(i,j,k) = Erad(i,j,k)                    &
-     & +dt*(                                          &
+     & +dt*cl*(                                       &
      & +(- radnflux1(merd,i+1,j,k)                    &
      &   + radnflux1(merd,i  ,j,k))/(x1a(i+1)-x1a(i)) &
      &   +srcrad(merd,i,j,k)                          &
@@ -433,7 +433,7 @@ subroutine Debug
   do k=ks,ke
   do j=js,je
   do i=is,ie
-     write(6,*) x1b(i),Erad(i,j,k),Frad(1,i,j,k)/cl,LFLD1(i,j,k)
+     write(6,*) x1b(i),Erad(i,j,k),Frad(1,i,j,k),LFLD1(i,j,k)
   enddo
   enddo
   enddo
