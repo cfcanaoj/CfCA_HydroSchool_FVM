@@ -283,9 +283,9 @@ end subroutine GenerateProblem
       do j=js,je
       do i=1,in-1
          radsvc(nerd,i,j,k) = Erad(  i,j,k) 
-         radsvc(nfr1,i,j,k) = Frad(xdir,i,j,k) 
-         radsvc(nfr2,i,j,k) = Frad(ydir,i,j,k) 
-         radsvc(nfr3,i,j,k) = Frad(zdir,i,j,k) 
+         radsvc(nfr1,i,j,k) = Frad(xdir,i,j,k)/Erad(  i,j,k)  
+         radsvc(nfr2,i,j,k) = Frad(ydir,i,j,k)/Erad(  i,j,k) 
+         radsvc(nfr3,i,j,k) = Frad(zdir,i,j,k)/Erad(  i,j,k)
 
 !         if(i .eq. is) print *, "StateRad",radsvc(nerd,i,j,k),radsvc(nerd,i-1,j,k)
       enddo
@@ -640,7 +640,7 @@ end subroutine UpdateRadAdvection
          k=ks
          j=js
          do i=is-gs,ie+gs
-            write(unitasc,*) x1b(i),Erad(i,j,k),Erad(i,j,k),Frad(xdir,i,j,k)
+            write(unitasc,*) x1b(i),Erad(i,j,k),Frad(xdir,i,j,k)
          enddo
          close(unitasc)
       endif
