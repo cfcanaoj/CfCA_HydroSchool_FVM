@@ -82,17 +82,74 @@ module fluxmod
   integer,parameter:: merd=1,mfr1=2,mfr2=3,mfr3=4 &
        &            , mfru=mufru,mfrv=mufrv,mfrw=mufrw
   real(8),dimension(mradflx,in,jn,kn):: radnflux1,radnflux2,radnflux3
-  real(8),dimension(mradflx,in,jn,kn):: srcrad
 
 end module fluxmod
+!===============================================================
+!  Chebyshev Super-Time-Stepping (STS) substep generator
+!  - Input : dt_exp  (the usual explicit stable timestep for diffusion)
+!            M       (number of STS substeps, e.g. 10-30)
+!            nu      (damping parameter, e.g. 1d-3 to 1d-2; must be > 0)
+!  - Output: dt_sub(1:M)  (substep timesteps)
+!            dt_tot       (sum of dt_sub; the effective large step)
+!
+!  Formula (Alexiades et al. type STS):
+!     dt_j = dt_exp / [ (1+nu) - (1-nu) * cos( (2j-1) * pi / (2M) ) ]
+!===============================================================
+module stsmod
+  implicit none
+  integer, parameter :: dp = kind(1.0d0)
+contains
+
+  subroutine MakeSTS(dt_exp, M, nu, dt_sub, dt_tot)
+    implicit none
+    real(dp), intent(in)  :: dt_exp, nu
+    integer,  intent(in)  :: M
+    real(dp), intent(out) :: dt_sub(M), dt_tot
+
+    integer :: j
+    real(dp) :: pi, theta, denom, nu_eff
+
+    if (M <= 0) then
+       dt_tot = 0.0_dp
+       return
+    end if
+
+    if (dt_exp <= 0.0_dp) then
+       dt_sub(:) = 0.0_dp
+       dt_tot    = 0.0_dp
+       return
+    end if
+
+    ! Safety: nu must be > 0 (otherwise some denom can get too small)
+    nu_eff = max(nu, 1.0d-12)
+
+    pi = 4.0_dp * atan(1.0_dp)
+    dt_tot = 0.0_dp
+
+    do j = 1, M
+      theta = (2.0_dp*j - 1.0_dp) * pi / (2.0_dp*M)
+      denom = (1.0_dp + nu_eff) - (1.0_dp - nu_eff) * cos(theta)
+      dt_sub(j) = dt_exp / denom
+      dt_tot    = dt_tot + dt_sub(j)
+    end do
+  end subroutine MakeSTS
+
+end module stsmod
 
 program main
   use commons
+  use stsmod
   implicit none
   character(20),parameter:: dirname="fld/"
   logical :: flag_binary = .false.
   logical,parameter:: force_on = .true.,force_off = .false.
-  
+  ! super time step
+  logical,parameter:: sts_on = .true.
+  integer,parameter:: Msts=12
+  real(8),parameter:: nusts=1.0d-3
+  real(8),dimension(Msts):: dt_sub
+  real(8):: dt_exp,dt_eff
+  integer:: nsts
   write(6,*) "setup grids and fields"
   call GenerateGrid
   call GenerateProblem
@@ -102,16 +159,33 @@ program main
   ! main loop
   write(6,*)"step","time","dt"
   mloop: do ntime=1,ntimemax
-     call TimestepControl
-     if(mod(ntime,100) .eq. 0 ) write(6,*)ntime,time,dt,Erad(is,js,ks)
-     call RadBoundaryCondition
-     call StateRad
-     call SourceRad
-     call RadFlux1
-     call UpdateRad
-     time=time+dt
-     call Output(force_off,flag_binary,dirname)
-     if(time > timemax) exit mloop
+     if(sts_on) then
+        call TimestepControl(dt_exp)
+        if(mod(ntime,100) .eq. 0 ) write(6,*)ntime,time,dt,Erad(is,js,ks)
+        call MakeSTS(dt_exp, Msts, nusts, dt_sub, dt_eff)
+        do nsts=1,Msts
+           dt = dt_sub(nsts)
+           call RadBoundaryCondition
+           call StateRad
+           call RadFlux1
+           call UpdateRadAdvection
+           call UpdateRadSource
+           time=time+dt
+        enddo
+        call Output(force_off,flag_binary,dirname)
+        if(time > timemax) exit mloop
+     else
+        call TimestepControl(dt)
+        if(mod(ntime,100) .eq. 0 ) write(6,*)ntime,time,dt,Erad(is,js,ks)
+        call RadBoundaryCondition
+        call StateRad
+        call RadFlux1
+        call UpdateRadAdvection
+        call UpdateRadSource
+        time=time+dt
+        call Output(force_off,flag_binary,dirname)
+        if(time > timemax) exit mloop
+     endif 
   enddo mloop
   call Output(force_on,flag_binary,dirname)
      
@@ -204,9 +278,10 @@ subroutine RadBoundaryCondition
   return
 end subroutine RadBoundaryCondition
 
-subroutine TimestepControl
+subroutine TimestepControl(dtcfl)
   use commons
   implicit none
+  real(8),intent(inout)::dtcfl
   real(8)::dtsrc
   real(8)::dtl1,dtdif1
   real(8)::dtl2,dtdif2
@@ -232,7 +307,7 @@ subroutine TimestepControl
   enddo
   enddo
 
-  dt = cfl * dtmin
+  dtcfl = cfl * dtmin
   !      write(6,*)"dt",dt
   return
 end subroutine TimestepControl
@@ -294,7 +369,7 @@ subroutine RadFlux1
 end subroutine Radflux1
 
 
-subroutine SourceRad
+subroutine UpdateRadSource
   use commons
   use fluxmod
   implicit none
@@ -308,19 +383,15 @@ subroutine SourceRad
   do j=js,je
   do i=is,ie
      alpha = d(i,j,k)*kappa(i,j,k)*cl*dt
-     srcrad(merd,i,j,k) = (Elte(i,j,k)-Erad(i,j,k))*alpha/(1+alpha)/dt/cl
-     srcrad(mfr1,i,j,k) =  -alpha/(1.0d0+alpha)/dt*Frad(1,i,j,k)/cl
-     srcrad(mfr2,i,j,k) =  -alpha/(1.0d0+alpha)/dt*Frad(2,i,j,k)/cl
-     srcrad(mfr3,i,j,k)=   -alpha/(1.0d0+alpha)/dt*Frad(3,i,j,k)/cl
-
+     Erad(i,j,k) = (Erad(i,j,k) + alpha*Elte(i,j,k))/(1+alpha)
   enddo
   enddo
   enddo
 
   return
-end subroutine SourceRad
+end subroutine UpdateRadSource
 
-subroutine UpdateRad
+subroutine UpdateRadAdvection
   use commons
   use fluxmod
   implicit none
@@ -334,7 +405,6 @@ subroutine UpdateRad
      & +dt*cl*(                                       &
      & +(- radnflux1(merd,i+1,j,k)                    &
      &   + radnflux1(merd,i  ,j,k))/(x1a(i+1)-x1a(i)) &
-     &   +srcrad(merd,i,j,k)                          &
      &      )
 
          Frad(1,i,j,k) = 0.5d0*(radnflux1(merd,i+1,j,k)+radnflux1(merd,i,j,k))
@@ -344,7 +414,7 @@ subroutine UpdateRad
   enddo
 
   return
-end subroutine UpdateRad
+end subroutine UpdateRadAdvection
 
 subroutine Output(flag_force,flag_binary,dirname)
   use commons
@@ -440,3 +510,5 @@ subroutine Debug
 
   return
 end subroutine Debug
+
+
