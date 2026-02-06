@@ -637,6 +637,7 @@ end subroutine UpdateRadAdvection
          open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write") 
          write(unitasc,"(a1,(1x,(A)),(1x,1PE15.4))") "#","time=",time
          write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","nx=", izones+2*gs
+         write(unitasc,"(a1,(A))") "#"," x E Fx"
          k=ks
          j=js
          do i=is-gs,ie+gs
