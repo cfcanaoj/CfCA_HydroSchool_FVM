@@ -432,7 +432,7 @@ subroutine UpdateRadSource
      Erad(i,j,k) = (Erad(i,j,k)+ alpha*Elte(i,j,k))/(1.0d0+alpha)
 
      
-            ei(i,j,k) = ei(i,j,k) - dt*(Erad(i,j,k)-En)
+            ei(i,j,k) = ei(i,j,k) - (Erad(i,j,k)-En)
             ei(i,j,k) = max(eimin,ei(i,j,k))
          tempK(i,j,k) = ei(i,j,k)/d(i,j,k)/Cv
 
@@ -516,8 +516,8 @@ subroutine Output(flag_force,flag_binary,dirname)
      radout(is-gs:ie+gs,js-gs:je+gs,ks,1) = Erad(  is-gs:ie+gs,js-gs:je+gs,ks)
      radout(is-gs:ie+gs,js-gs:je+gs,ks,2) = Frad(1,is-gs:ie+gs,js-gs:je+gs,ks)
      radout(is-gs:ie+gs,js-gs:je+gs,ks,3) = Frad(2,is-gs:ie+gs,js-gs:je+gs,ks)
-     radout(is-gs:ie+gs,js-gs:je+gs,ks,5) =    d(  is-gs:ie+gs,js-gs:je+gs,ks)
-     radout(is-gs:ie+gs,js-gs:je+gs,ks,6) =   ei(  is-gs:ie+gs,js-gs:je+gs,ks)
+     radout(is-gs:ie+gs,js-gs:je+gs,ks,4) =    d(  is-gs:ie+gs,js-gs:je+gs,ks)
+     radout(is-gs:ie+gs,js-gs:je+gs,ks,5) =   ei(  is-gs:ie+gs,js-gs:je+gs,ks)
 
      write(filename,'(a4,i5.5,a4)')"snap",nout,".dat"
      filename = trim(dirname)//filename
