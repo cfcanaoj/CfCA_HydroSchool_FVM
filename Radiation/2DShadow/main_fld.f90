@@ -227,6 +227,7 @@ subroutine GenerateProblem
   write(6,*) "Erad in [erg/cm^3]",arad*tempRad**4
   eimin = rho0*Cv*tempMed
   eradmin = arad*tempMed**4
+  !$omp parallel do collapse(3) default(shared) private(i,j,k,delta)
 
   do k=ks,ke
   do j=1,jn-1
@@ -246,7 +247,10 @@ subroutine GenerateProblem
   enddo
   enddo
 
-  Erad(:,:,:) = arad*(tempMed)**4
+  
+  !$omp end parallel do
+Erad(:,:,:) = arad*(tempMed)**4
+  !$omp parallel do collapse(3) default(shared) private(i,j,k)
 
   do k=ks,ke
   do j=js,je
@@ -261,7 +265,9 @@ subroutine GenerateProblem
   enddo
   enddo
       
-  call RadBoundaryCondition
+  
+  !$omp end parallel do
+call RadBoundaryCondition
 !      write(6,*) "Gene",Erad(  is-1,js,ks),Erad(  is,js,ks)
 
   return
@@ -274,6 +280,7 @@ subroutine RadBoundaryCondition
   integer::i,j,k
   real(8),parameter::tempRad=1740.0d0 ! [K]
   real(8),parameter::tempMed= 290.0d0 ! [K]
+  !$omp parallel do collapse(3) default(shared) private(i,j,k)
 
   do k=ks,ke
   do j=js,je
@@ -283,7 +290,10 @@ subroutine RadBoundaryCondition
   enddo
   enddo
 
-  do k=ks,ke
+  
+  !$omp end parallel do
+  !$omp parallel do collapse(3) default(shared) private(i,j,k)
+do k=ks,ke
   do j=js,je
   do i=1,mgn
      Erad(    ie+i,j,k) = 1.0d-5*Erad(  ie,j,k)
@@ -291,7 +301,10 @@ subroutine RadBoundaryCondition
   enddo
   enddo
 
+
+  !$omp end parallel do
 ! j-direction
+  !$omp parallel do collapse(3) default(shared) private(i,j,k)
   do k=ks,ke
   do i=is,ie
   do j=1,mgn
@@ -300,7 +313,10 @@ subroutine RadBoundaryCondition
   enddo
   enddo
 
-  do k=ks,ke
+  
+  !$omp end parallel do
+  !$omp parallel do collapse(3) default(shared) private(i,j,k)
+do k=ks,ke
   do i=is,ie
   do j=1,mgn
      Erad(  i,je+j,k) =  Erad(  i,je-j+1,k)
@@ -308,7 +324,9 @@ subroutine RadBoundaryCondition
    enddo
    enddo
 
-   return
+   
+  !$omp end parallel do
+return
 end subroutine RadBoundaryCondition
 
 subroutine TimestepControl(dtcfl)
@@ -323,6 +341,7 @@ subroutine TimestepControl(dtcfl)
   real(8)::dtmin
   integer::i,j,k
   dtmin=1.0d90
+  !$omp parallel do collapse(3) default(shared) private(i,j,k,dtdif1,dtl1,dtdif2,dtl2,dtlocal) reduction(min:dtmin)
   do k=ks,ke
   do j=js,je
   do i=is,ie
@@ -340,7 +359,9 @@ subroutine TimestepControl(dtcfl)
   enddo
   enddo
 
-  dtcfl = cfl * dtmin
+  
+  !$omp end parallel do
+dtcfl = cfl * dtmin
 !      write(6,*)"dt",dt
   return
 end subroutine TimestepControl
@@ -353,6 +374,7 @@ subroutine RadFlux1
   integer::i,j,k
   real(8):: Rfc,lambda
   real(8),parameter::tiny=1.0d-30
+  !$omp parallel do collapse(3) default(shared) private(i,j,k,Rfc,lambda)
 
   do k=ks,ke
   do j=js,je
@@ -373,7 +395,9 @@ subroutine RadFlux1
   enddo
   enddo
   
-  return
+  
+  !$omp end parallel do
+return
 end subroutine Radflux1
 
 subroutine RadFlux2
@@ -384,6 +408,7 @@ subroutine RadFlux2
   integer::i,j,k
   real(8):: Rfc,lambda
   real(8),parameter::tiny=1.0d-30
+  !$omp parallel do collapse(3) default(shared) private(i,j,k,Rfc,lambda)
 
   do k=ks,ke
   do i=is,ie
@@ -404,7 +429,9 @@ subroutine RadFlux2
   enddo
   enddo
 
-  return
+  
+  !$omp end parallel do
+return
 end subroutine Radflux2
 
 
@@ -419,6 +446,7 @@ subroutine UpdateRadSource
   real(8):: En
 
   pi = acos(-1.0d0)
+  !$omp parallel do collapse(3) default(shared) private(i,j,k,alpha,En)
 
   do k=ks,ke
   do j=js,je
@@ -441,7 +469,9 @@ subroutine UpdateRadSource
   enddo
   enddo
 
-  return
+  
+  !$omp end parallel do
+return
 end subroutine UpdateRadSource
 
 subroutine UpdateRadAdvection
@@ -451,6 +481,7 @@ subroutine UpdateRadAdvection
   implicit none
   real(8)::fnl,flm
   integer::i,j,k
+  !$omp parallel do collapse(3) default(shared) private(i,j,k,fnl,flm)
 
   do k=ks,ke
   do j=js,je
@@ -474,7 +505,9 @@ subroutine UpdateRadAdvection
   enddo
   enddo
 
-  return
+  
+  !$omp end parallel do
+return
 end subroutine UpdateRadAdvection
 
 subroutine Output(flag_force,flag_binary,dirname)
