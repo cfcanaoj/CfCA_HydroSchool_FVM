@@ -3,8 +3,6 @@
 国立天文台 CfCA（Center for Computational Astrophysics）流体学校（FY2025）向けの、**有限体積法（Finite Volume Method; FVM）** による流体・MHD 計算の実習用コードとテスト問題集です。  
 「動く完成品を配布する」だけでなく、講義内容（CFL条件、保存則、リーマンソルバー、MUSCL/TVD、境界条件、多次元効果など）を **手元で再現・比較できる** ことを目的にしています。
 
-> このブランチ：`hydroshool2025` は FY2025 用の配布・実習セットです。
-
 ---
 
 ## 収録内容（ディレクトリ）
@@ -22,10 +20,9 @@
   - `KelvinHelmholtz`（KH不安定）
   - `RayleighTaylor`（RT不安定）
   - `DecayingTurbulence`（減衰乱流）
+- `Radiation/` : 輻射輸送
 - `vis3D/` : 可視化補助（3D/多次元データ向け）
 - `documents/` : 講義・実習用の資料
-
-（上の一覧はリポジトリ直下の表示に合わせています。）
 
 ---
 

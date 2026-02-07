@@ -69,6 +69,6 @@ for istep in range(nmin,nmax+1):
 ani = ArtistAnimation(fig, frames, interval=50)
 
 # mp4 画像として保存する。
-ani.save(dirname + "/pyanime.mp4", writer="imagemagick")
+ani.save(dirname + "/animation.mp4", writer="imagemagick")
 plt.show()
 #plt.close()

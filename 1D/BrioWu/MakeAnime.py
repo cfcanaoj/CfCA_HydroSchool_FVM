@@ -31,10 +31,11 @@ frames = []  # 各フレームを構成する Artist 一覧
 anasol = np.loadtxt("briowu_nonregsol.dat")
 tout_ana = 0.1
 x_ana = anasol[:,0] - 0.5
-den_ana = anasol[:,1]
-vx_ana = anasol[:,3]
-vy_ana = anasol[:,4]
-by_ana = anasol[:,7]
+
+den_ana = np.concatenate(([anasol[0,1]], anasol[:,1], [anasol[-1,1]]))
+vx_ana = np.concatenate(([anasol[0,3]], anasol[:,3], [anasol[-1,3]]))
+vy_ana = np.concatenate(([anasol[0,4]], anasol[:,4], [anasol[-1,4]]))
+by_ana = np.concatenate(([anasol[0,7]], anasol[:,7], [anasol[-1,7]]))
 
 # フレームごとの Artist を作成する。
 icount = 0
@@ -54,15 +55,17 @@ for istep in range(nmin,nmax+1):
     vy = data[:,3]
     By = data[:,7]
 
+    x_ana1 = np.concatenate(([-0.5], x_ana*time/tout_ana, [0.5]))
+
     # グラフを作成する。
     pg00, = ax[0].plot(x, den, 'o-',c="r",label="numerical")
-    pg01, = ax[0].plot(x_ana*time/tout_ana, den_ana, '-',c="b",label="exact")
+    pg01, = ax[0].plot(x_ana1, den_ana, '-',c="b",label="exact")
     pg10, = ax[1].plot(x, vx, 'o-',c="r",label="numerical")
-    pg11, = ax[1].plot(x_ana*time/tout_ana, vx_ana, '-',c="b",label="exact")
+    pg11, = ax[1].plot(x_ana1, vx_ana, '-',c="b",label="exact")
     pg20, = ax[2].plot(x, vy, 'o-',c="r",label="numerical")
-    pg21, = ax[2].plot(x_ana*time/tout_ana, vy_ana, '-',c="b",label="exact")
+    pg21, = ax[2].plot(x_ana1, vy_ana, '-',c="b",label="exact")
     pg30, = ax[3].plot(x, By, 'o-',c="r",label="numerical")
-    pg31, = ax[3].plot(x_ana*time/tout_ana, by_ana, '-',c="b",label="exact")
+    pg31, = ax[3].plot(x_ana1, by_ana, '-',c="b",label="exact")
 
     pg3 = ax[0].text(0,1.10,r"$\mathrm{time} = %.2f$"%(time),horizontalalignment="center")
 
@@ -78,6 +81,6 @@ for istep in range(nmin,nmax+1):
 ani = ArtistAnimation(fig, frames, interval=50)
 
 # mp4 画像として保存する。
-ani.save("animation.mp4", writer="imagemagick")
+ani.save(dirname + "/animation.mp4", writer="imagemagick")
 #plt.show()
 #plt.close()
