@@ -35,9 +35,10 @@ frames = []  # 各フレームを構成する Artist 一覧
 anasol = np.loadtxt("sod_ana.dat")
 tout_ana = 0.2
 x_ana = anasol[:,0]
-den_ana = anasol[:,1]
-vel_ana = anasol[:,2]
-pre_ana = anasol[:,3]
+
+den_ana = np.concatenate(([anasol[0,1]], anasol[:,1], [anasol[-1,1]]))
+vel_ana = np.concatenate(([anasol[0,2]], anasol[:,2], [anasol[-1,2]]))
+pre_ana = np.concatenate(([anasol[0,3]], anasol[:,3], [anasol[-1,3]]))
 
 # フレームごとの Artist を作成する。
 icount = 0
@@ -56,13 +57,18 @@ for istep in range(nmin,nmax+1):
     vel = data[:,2]
     pre = data[:,3]
 
+    x_ana1 = np.concatenate(([-0.5], x_ana*time/tout_ana, [0.5]))
+
+
     # グラフを作成する。
     pg00, = ax[0].plot(x, den, 'o-',c="r",label="numerical")
-    pg01, = ax[0].plot(x_ana*time/tout_ana, den_ana, '-',c="b",label="exact")
+    pg01, = ax[0].plot(x_ana1, den_ana, '-',c="b",label="exact")
+
     pg10, = ax[1].plot(x, vel, 'o-',c="r",label="numerical")
-    pg11, = ax[1].plot(x_ana*time/tout_ana, vel_ana, '-',c="b",label="exact")
+    pg11, = ax[1].plot(x_ana1, vel_ana, '-',c="b",label="exact")
+
     pg20, = ax[2].plot(x, pre, 'o-',c="r",label="numerical")
-    pg21, = ax[2].plot(x_ana*time/tout_ana, pre_ana, '-',c="b",label="exact")
+    pg21, = ax[2].plot(x_ana1, pre_ana, '-',c="b",label="exact")
 
     pg3 = ax[0].text(0,1.10,r"$\mathrm{time} = %.2f$"%(time),horizontalalignment="center")
 
@@ -78,6 +84,6 @@ for istep in range(nmin,nmax+1):
 ani = ArtistAnimation(fig, frames, interval=50)
 
 # mp4 画像として保存する。
-ani.save(dirname + "/pyanime.mp4", writer="imagemagick")
+ani.save(dirname + "/animation.mp4", writer="imagemagick")
 #plt.show()
 plt.close()
