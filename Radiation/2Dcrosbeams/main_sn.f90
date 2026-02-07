@@ -240,9 +240,9 @@ subroutine RadBoundaryCondition
   do i=1,mgn
      do m=1,mang
         if(mux(m) > 0.0d0) then
-           fdis(m     ,is-i,j,k) = fdis(m,is,j,k) ! outflos
+           fdis(m     ,ie+i,j,k) = fdis(m,is,j,k) ! outflos
         else
-           fdis(m     ,is-i,j,k) = erad0/dth(m) ! fixed
+           fdis(m     ,ie+i,j,k) = erad0/dth(m) ! fixed
         endif
      enddo
   enddo
