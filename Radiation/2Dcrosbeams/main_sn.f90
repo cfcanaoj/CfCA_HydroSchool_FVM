@@ -25,8 +25,8 @@ module modelpara
   implicit none
   real(8),parameter:: rho0  = 1.0d0 ! [g/cm^3]
   real(8),parameter:: kap0  = 0.0d0 ! [cm^2/g]
-  real(8),parameter:: erad0 = 0.1d0 ! [erg/cm^3]
-  real(8),parameter:: erad1 = 2.5d0 ! [erg/cm^3]
+  real(8),parameter:: erad0 = 1.0d-4 ! [erg/cm^3]
+  real(8),parameter:: erad1 = 1.0d0 ! [erg/cm^3]
 end module modelpara
 
 module weno5
@@ -78,8 +78,8 @@ module gridmod
   integer, parameter :: ks = 1
   integer, parameter :: ke = 1
 
-  real(8), parameter :: x1min=0.d0, x1max=1.d0
-  real(8), parameter :: x2min=0.d0, x2max=0.24d0
+  real(8), parameter :: x1min=0.d0, x1max=5.0d0
+  real(8), parameter :: x2min=0.d0, x2max=5.0d0
   real(8), parameter :: x3min=0.d0, x3max=0.0d0
 
   real(8):: dx ! (xmax-xmin)/izones
@@ -225,7 +225,11 @@ subroutine RadBoundaryCondition
   do j=js,je
   do i=1,mgn
      do m=1,mang
-        fdis(m     ,is-i,j,k) = fdis(m,is,j,k)
+        if(mux(m) >= 0.0d0) then
+           fdis(m     ,is-i,j,k) = erad0/dth(m) ! fixed
+        else
+           fdis(m     ,is-i,j,k) = fdis(m,is,j,k) ! outflos
+        endif
      enddo
   enddo
   enddo
@@ -235,11 +239,11 @@ subroutine RadBoundaryCondition
   do j=js,je
   do i=1,mgn
      do m=1,mang
-!        if(mux(m) > 0)then
-           fdis(m,ie+i,j,k) = fdis(m,ie,j,k)
-!        else
-!           fdis(m,ie+i,j,k) = arad*tempMed**4/dth(m)
-!        endif
+        if(mux(m) > 0.0d0) then
+           fdis(m     ,is-i,j,k) = fdis(m,is,j,k) ! outflos
+        else
+           fdis(m     ,is-i,j,k) = erad0/dth(m) ! fixed
+        endif
      enddo
   enddo
   enddo
@@ -259,12 +263,16 @@ subroutine RadBoundaryCondition
            enddo
         else if(x1b(i) > 4.0d0 )then
            do m=1,mang
-              fdis(m,i,js-j,k) = fdis(m,i,js,k)
-              if (m == 15 ) fdis(m,i,js-j,k) = erad1/dth(m)
+              fdis(m,i,js-j,k) = erad0/dth(m)
+              if (m == 7 ) fdis(m,i,js-j,k) = erad1/dth(m)
            enddo
         else
            do m=1,mang
-              fdis(m,i,js-j,k) = fdis(m,i,js,k)
+              if(muy(m) >= 0.0d0) then
+                 fdis(m,i,js-j,k) = erad0/dth(m) ! fixed
+              else
+                 fdis(m,i,js-j,k) = fdis(m,i,js,k) ! outflow
+              endif
            enddo
         endif
      enddo
@@ -288,7 +296,11 @@ subroutine RadBoundaryCondition
   do i=is,ie
   do j=1,mgn
      do m=1,mang
-        fdis(m,i,je+j,k) = fdis(m,i,je-j+1,k)
+        if(muy(m) > 0.0d0) then
+           fdis(m,i,je+j,k) = fdis(m,i,je-j+1,k) ! outflow
+        else
+           fdis(m,i,je+j,k) = erad0/dth(m) ! fixed
+        endif
      enddo
    enddo
    enddo
