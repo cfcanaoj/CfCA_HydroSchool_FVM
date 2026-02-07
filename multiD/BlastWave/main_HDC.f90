@@ -102,12 +102,14 @@ real(8) :: phys_evo(nevo)
          Uo(:,:,:) = U(:,:,:)
 
          call NumericalFlux( dt, xf, yf, Q, F, G )
-         call UpdateConsv( 0.5d0*dt, dt, xf, yf, F, G, Q, Uo, U )
+         call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Uo, U )
+         call SrcTerms( 0.5d0*dt, dt, Q, U)
          call Consv2Prim( U, Q )
          call BoundaryCondition(Q )
 !
          call NumericalFlux( dt, xf, yf, Q, F, G )
-         call UpdateConsv( dt, dt, xf, yf, F, G, Q, Uo, U )
+         call UpdateConsv( dt, xf, yf, F, G, Uo, U )
+         call SrcTerms( dt, dt, Q, U)
          call Consv2Prim( U, Q )
          call BoundaryCondition( Q )
 
@@ -209,29 +211,29 @@ implicit none
 real(8), intent(inout) :: Q(:,:,:)
 integer::i,j
 
+!$omp parallel default(none) &
+!$omp shared(Q) &
+!$omp private(i,j) 
+
+!$omp do collapse(2) schedule(static)
       do j=1,nytot-1
       do i=1,ngh
-          Q(:,is-i,j)  = Q(:,ie+1-i,j)
+          Q(:,is-i,j) = Q(:,ie+1-i,j)
+          Q(:,ie+i,j) = Q(:,is+i-1,j)
       enddo
       enddo
+!$omp end do
 
-      do j=1,nytot-1
-      do i=1,ngh
-          Q(:,ie+i,j)= Q(:,is+i-1,j)
-      enddo
-      enddo
-
+!$omp do collapse(2) schedule(static)
       do j=1,ngh
       do i=1,nxtot-1
           Q(:,i,js-j)  = Q(:,i,je+1-j)
-      enddo
-      enddo
-
-      do j=1,ngh
-      do i=1,nxtot-1
           Q(:,i,je+j)  = Q(:,i,js+j-1)
       enddo
       enddo
+!$omp end do
+
+!$omp end parallel
 
 return
 end subroutine BoundaryCondition
@@ -851,14 +853,13 @@ end subroutine HLLD
 !-------------------------------------------------------------------
 !       Update consevative variables U using numerical flux F
 !-------------------------------------------------------------------
-subroutine UpdateConsv( dt1, dt0, xf, yf, F, G, Q, Uo, U)
+subroutine UpdateConsv( dt1, xf, yf, F, G, Uo, U)
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
                    IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, alpha, Ccfl
 implicit none
-real(8), intent(in) :: dt1, dt0
+real(8), intent(in) :: dt1 
 real(8), intent(in)  :: xf(:), yf(:)
 real(8), intent(in)  :: F(:,:,:), G(:,:,:)
-real(8), intent(in)  :: Q(:,:,:)
 real(8), intent(in)  :: Uo(:,:,:)
 real(8), intent(inout) :: U(:,:,:)
 integer::i,j
@@ -877,19 +878,34 @@ integer::i,j
       enddo
 !$omp end do
 
+!$omp end parallel
+
+return
+end subroutine UpdateConsv
+!-------------------------------------------------------------------
+!       Update consevative variables U using numerical flux F
+!-------------------------------------------------------------------
+subroutine SrcTerms( dt1, dt0, Q, U )
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, alpha, Ccfl
+implicit none
+real(8), intent(in) :: dt1, dt0
+real(8), intent(in)  :: Q(:,:,:)
+real(8), intent(inout) :: U(:,:,:)
+integer :: i,j
+
       ! Source term
-!$omp do collapse(2) schedule(static)
+!$omp parallel 
+      !$omp do private( i, j )
       do j=js,je
       do i=is,ie
          U(IPS,i,j) = U(IPS,i,j)*dexp(-alpha*Ccfl*dt1/dt0)
       enddo
       enddo
-!$omp end do
-
+      !$omp end do
 !$omp end parallel
 
-return
-end subroutine UpdateConsv
+end subroutine SrcTerms
 !-------------------------------------------------------------------
 !       Output snapshot files 
 !       Input  : flag, dirname, xf, xv, Q
