@@ -5,6 +5,7 @@ set yrange [*:*]
 set xrange [*:*]
 
 model="m1"
+print "Plot data in ".model
 
 do for [i = 1:40 ] {
   inpfile=model.sprintf("/snap%05d.dat",i)
