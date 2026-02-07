@@ -22,6 +22,7 @@
   - `KelvinHelmholtz`（KH不安定）
   - `RayleighTaylor`（RT不安定）
   - `DecayingTurbulence`（減衰乱流）
+- `Radiation/` : 輻射輸送
 - `vis3D/` : 可視化補助（3D/多次元データ向け）
 - `documents/` : 講義・実習用の資料
 
