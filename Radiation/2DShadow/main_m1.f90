@@ -82,7 +82,7 @@ module fluxmod
  &                  , mfru=mufru,mfrv=mufrv,mfrw=mufrw
   real(8),dimension(mradflx,in,jn,kn):: radnflux1,radnflux2,radnflux3
   logical,parameter::flagEdd=.false.
-  real(8),parameter::fluxfactormax=0.9d0
+  real(8),parameter::fluxfactormax=0.999d0
 
 end module fluxmod
 
