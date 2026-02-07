@@ -61,7 +61,7 @@ program main
 !$ use omp_lib
 use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
 implicit none
-include "interfaces.inc"
+include "interfaces_hdc.inc"
 
 ! time evolution
 integer :: ntime = 0    ! counter of the timestep
