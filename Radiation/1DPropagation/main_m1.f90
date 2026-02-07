@@ -80,6 +80,7 @@ module fluxmod
        &            , mfru=mufru,mfrv=mufrv,mfrw=mufrw
   real(8),dimension(mradflx,in,jn,kn):: radnflux1,radnflux2,radnflux3
   logical,parameter::flagEdd=.false.
+  real(8),parameter::fluxfactormax=0.999d0
 
 end module fluxmod
 module closure
@@ -221,6 +222,7 @@ end subroutine GenerateProblem
       subroutine RadBoundaryCondition
         use commons
         use modelpara
+        use fluxmod
       implicit none
       integer::i,j,k
 
@@ -231,7 +233,7 @@ end subroutine GenerateProblem
           if(d(is-i,j,k) .gt. 1.0d0) then
              Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)/sqrt(3.0d0)
           else
-             Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)*0.99
+             Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)*fluxfactormax
           endif
           Frad(ydir:zdir,  is-i,j,k) = 0.0d0
  
@@ -533,7 +535,7 @@ subroutine UpdateRadSource
      Erad(i,j,k) =  max(Erad(i,j,k),Elte(i,j,k))
 
      fnl = sqrt(Frad(xdir,i,j,k)**2 +Frad(ydir,i,j,k)**2 +Frad(zdir,i,j,k)**2)
-     flm =  0.99*Erad(i,j,k)
+     flm =  fluxfactormax*Erad(i,j,k)
      if(fnl .gt. flm )then
         Frad(xdir,i,j,k) =  Frad(xdir,i,j,k)*flm/fnl
         Frad(ydir,i,j,k) =  Frad(ydir,i,j,k)*flm/fnl
@@ -584,7 +586,7 @@ subroutine UpdateRadAdvection
          Erad(i,j,k) =  max(Erad(i,j,k),Elte(i,j,k))
 
          fnl = sqrt(Frad(xdir,i,j,k)**2 +Frad(ydir,i,j,k)**2 +Frad(zdir,i,j,k)**2) ! dimensional
-         flm =  0.99*Erad(i,j,k)
+         flm =  fluxfactormax*Erad(i,j,k)
          if(fnl .gt. flm )then
             Frad(xdir,i,j,k) =  Frad(xdir,i,j,k)*flm/fnl
             Frad(ydir,i,j,k) =  Frad(ydir,i,j,k)*flm/fnl
