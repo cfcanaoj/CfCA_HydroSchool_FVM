@@ -7,17 +7,13 @@ module params
     ! coordinate 
     integer,parameter::nx=128! the number of grids in the simulation box
     integer,parameter::ny=128 ! the number of grids in the simulation box
-    integer,parameter::nz=1          ! the number of grids in the simulation box
     integer,parameter::ngh=2         ! the number of ghost cells
     integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
     integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-    integer,parameter::nztot=2 ! the total number of grids including ghost cells
     integer,parameter::is=ngh+1         ! the index of the leftmost grid
     integer,parameter::js=ngh+1         ! the index of the leftmost grid
-    integer,parameter::ks=1         ! the index of the leftmost grid
     integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
     integer,parameter::je=ny+ngh     ! the index of the rightmost grid
-    integer,parameter::ke=1 ! the index of the rightmost grid
     real(8),parameter::xmin=-0.5d0,xmax=0.5d0
     real(8),parameter::ymin=-0.5d0,ymax=0.5d0
     real(8),parameter::zmin=0.0d0,zmax=1.0d0
@@ -54,14 +50,14 @@ module params
     real(8), parameter:: dtsnap=0.5d-2
     
     ! realtime analysis 
-    integer, parameter :: nevo = 3
+    integer, parameter :: nevo = 1
     integer, parameter :: unitevo =11
     integer, parameter :: unitbin =13
 end module
 
 program main
 !$ use omp_lib
-use params, only : nxtot, nytot, nztot, NVAR, dirname, unitevo, timemax, nevo
+use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
 implicit none
 include "interfaces_ct.inc"
 
@@ -74,17 +70,15 @@ real(8) :: dt   = 0.0d0  ! time width
 ! definition of arrays 
 real(8),dimension(nxtot)::xf,xv
 real(8),dimension(nytot)::yf,yv
-real(8),dimension(nztot)::zf,zv
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: Uo
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: U
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: Q
-real(8),dimension(3,nxtot,nytot,nztot) :: Bso 
-real(8),dimension(3,nxtot,nytot,nztot) :: Bs 
-real(8),dimension(3,nxtot,nytot,nztot) :: Bc
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: F
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: G
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: H
-real(8),dimension(3,nxtot,nytot,nztot) :: E 
+real(8),dimension(NVAR,nxtot,nytot) :: Uo
+real(8),dimension(NVAR,nxtot,nytot) :: U
+real(8),dimension(NVAR,nxtot,nytot) :: Q
+real(8),dimension(3,nxtot,nytot) :: Bso 
+real(8),dimension(3,nxtot,nytot) :: Bs 
+real(8),dimension(3,nxtot,nytot) :: Bc
+real(8),dimension(NVAR,nxtot,nytot) :: F
+real(8),dimension(NVAR,nxtot,nytot) :: G
+real(8),dimension(3,nxtot,nytot) :: E 
 
 real(8) :: phys_evo(nevo)
 
@@ -94,31 +88,31 @@ real(8) :: phys_evo(nevo)
       call makedirs(trim(dirname))
 
     write(6,*) "setup grids and initial condition"
-    call GenerateGrid(xf, xv, yf, yv, zf, zv)
-    call GenerateProblem(xv, yv, zv, Q, Bs, Bc)
+    call GenerateGrid(xf, xv, yf, yv)
+    call GenerateProblem(xv, yv, Q, Bs, Bc)
     call Prim2Consv(Q, Bc, U)
     call BoundaryCondition( Q, Bs, Bc )
-    call Output( time, .TRUE., dirname, xf, xv, yf, yv, Q, Bc )
+    call Output( time, .TRUE., dirname, xv, yv, Q, Bc )
 
 
   write(6,*) "Start the simulation"
   open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
   do 
-        dt = TimestepControl(xf, yf, zf, Q, Bc)
+        dt = TimestepControl(xf, yf, Q, Bc)
         if( time + dt > timemax ) dt = timemax - time
 
-        Uo(:,:,:,:) = U(:,:,:,:)
-        Bso(:,:,:,:) = Bs(:,:,:,:)
+        Uo(:,:,:) = U(:,:,:)
+        Bso(:,:,:) = Bs(:,:,:)
 
 
-        call NumericalFlux( 0.5*dt, xf, yf, zf, Q, Bc, Bs, F, G, H, E )
-        call UpdateConsv( 0.5d0*dt,  xf, xv, yf, yv, zf, zv, F, G, H, E, Q, U, Bs, U, Bs )
+        call NumericalFlux( 0.5*dt, xf, yf, Q, Bc, Bs, F, G, E )
+        call UpdateConsv( 0.5d0*dt,  xf, xv, yf, yv, F, G, E, Q, Uo, Bso, U, Bs )
         call Consv2Prim( U, Bs, Q, Bc )
         call BoundaryCondition( Q, Bs, Bc )
 
-        call NumericalFlux( dt, xf, yf, zf, Q, Bc, Bs, F, G, H, E )
-        call UpdateConsv( dt, xf, xv, yf, yv, zf, zv, F, G, H, E, Q, Uo, Bso, U, Bs )
+        call NumericalFlux( dt, xf, yf, Q, Bc, Bs, F, G, E )
+        call UpdateConsv( dt, xf, xv, yf, yv, F, G, E, Q, Uo, Bso, U, Bs )
         call Consv2Prim( U, Bs, Q, Bc )
         call BoundaryCondition( Q, Bs, Bc )
 
@@ -129,15 +123,14 @@ real(8) :: phys_evo(nevo)
              call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
              write(unitevo,*) time, phys_evo(1:nevo)
          endif
-         call Output( time, .FALSE., dirname, xf, xv, yf, yv, Q, Bc)
-!         call Output( .true., xf, xv, yf, yv, Q, Bc)
+         call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
 
          print*, "time = ",time, "dt = ",dt
 
          if(time >= timemax) exit 
       enddo 
       close(unitevo)
-      call Output( time, .TRUE., dirname, xf, xv, yf, yv, Q, Bc)
+      call Output( time, .TRUE., dirname, xv, yv, Q, Bc)
 
 
 !      write(6,*) "program has been finished"
@@ -145,15 +138,14 @@ real(8) :: phys_evo(nevo)
 end program main
 !-------------------------------------------------------------------
 !       Generate coordiantes
-!       xf,yf,zf --> cell boundary xf(i) <==> x_{i-1/2}
-!       xv,yv,zv --> cell center   xv(i) <==> x_{i}
+!       xf,yf --> cell boundary xf(i) <==> x_{i-1/2}
+!       xv,yv --> cell center   xv(i) <==> x_{i}
 !-------------------------------------------------------------------
-subroutine GenerateGrid(xf, xv, yf, yv, zf, zv)
-use params, only : nxtot, nytot, nztot, nx, ny, ngh, xmax, xmin, ymax, ymin 
+subroutine GenerateGrid(xf, xv, yf, yv)
+use params, only : nxtot, nytot, nx, ny, ngh, xmax, xmin, ymax, ymin 
 implicit none
 real(8), intent(out) :: xf(:), xv(:)
 real(8), intent(out) :: yf(:), yv(:)
-real(8), intent(out) :: zf(:), zv(:)
 real(8) :: dx,dy
 integer::i,j
 
@@ -178,61 +170,52 @@ end subroutine GenerateGrid
 !-------------------------------------------------------------------
 !       Generate initial condition of the primitive variables
 !-------------------------------------------------------------------
-subroutine GenerateProblem(xv, yv, zv, Q, Bs, Bc )
-use params, only : is, ie, js, je, ks, ke, &
-                   IDN, IVX, IVY, IVZ, IPR
+subroutine GenerateProblem(xv, yv, Q, Bs, Bc )
+use params, only : is, ie, js, je, IDN, IVX, IVY, IVZ, IPR
 implicit none
-integer::i, j, k
-real(8), intent(in ) :: xv(:), yv(:), zv(:)
-real(8), intent(out) :: Q(:,:,:,:)
-real(8), intent(out) :: Bs(:,:,:,:)
-real(8), intent(out) :: Bc(:,:,:,:)
+integer::i, j
+real(8), intent(in ) :: xv(:), yv(:)
+real(8), intent(out) :: Q(:,:,:)
+real(8), intent(out) :: Bs(:,:,:)
+real(8), intent(out) :: Bc(:,:,:)
 real(8) :: pi, B0
 
     B0 = 10d0
     pi = dacos(-1.0d0)
 
-    do k=ks,ke
     do j=js,je
     do i=is,ie
-         Q(IDN,i,j,k) = 1.0d0
+         Q(IDN,i,j) = 1.0d0
          if( xv(i)**2 + yv(j)**2 < 0.1d0**2 ) then
-             Q(IPR,i,j,k) = 10.0d0
+             Q(IPR,i,j) = 10.0d0
          else 
-             Q(IPR,i,j,k) = 0.1d0
+             Q(IPR,i,j) = 0.1d0
          endif
-         Q(IVX,i,j,k) = 0.0d0
-         Q(IVY,i,j,k) = 0.0d0
-         Q(IVZ,i,j,k) = 0.0d0
-    enddo
+         Q(IVX,i,j) = 0.0d0
+         Q(IVY,i,j) = 0.0d0
+         Q(IVZ,i,j) = 0.0d0
     enddo
     enddo
 
-    do k=ks,ke
     do j=js,je
     do i=is,ie+1
-        Bs(1,i,j,k) = B0/sqrt(2.0d0)
-    enddo
+        Bs(1,i,j) = B0/sqrt(2.0d0)
     enddo
     enddo
 
-    do k=ks,ke
     do j=js,je+1
     do i=is,ie
-        Bs(2,i,j,k) = B0/sqrt(2.0d0)
-    enddo
+        Bs(2,i,j) = B0/sqrt(2.0d0)
     enddo
     enddo
 
-    do k=ks,ke+1
     do j=js,je
     do i=is,ie
-        Bs(3,i,j,k) = 0.0d0
-    enddo
+        Bs(3,i,j) = 0.0d0
     enddo
     enddo
 
-    call CellCenterMagneticField(is, ie, js, je, ks, ke, Bs, Bc)
+    call CellCenterMagneticField(is, ie, js, je, Bs, Bc)
 
 
 return
@@ -241,152 +224,120 @@ end subroutine GenerateProblem
 !       Boundary Condition of the primitive variables
 !-------------------------------------------------------------------
 subroutine BoundaryCondition( Q, Bs, Bc )
-use params, only : is, ie, js, je, ks, ke, ngh, &
+use params, only : is, ie, js, je, ngh, &
                    IDN, IVX, IVY, IVZ, IPR
 implicit none
-real(8), intent(inout) :: Q(:,:,:,:)
-real(8), intent(inout) :: Bs(:,:,:,:)
-real(8), intent(inout) :: Bc(:,:,:,:)
-integer::i,j,k
+real(8), intent(inout) :: Q(:,:,:)
+real(8), intent(inout) :: Bs(:,:,:)
+real(8), intent(inout) :: Bc(:,:,:)
+integer::i,j
 
     ! x inner boundary
-    do k=ks,ke
     do j=js-ngh,je+ngh
     do i=1,ngh
-        Q(:,is-i,j,k)  = Q(:,ie+1-i,j,k)
-    enddo
+        Q(:,is-i,j)  = Q(:,ie+1-i,j)
     enddo
     enddo
 
-    do k=ks,ke
     do j=js-ngh,je+ngh
     do i=1,ngh
-          Bs(1,is-i,j,k) = Bs(1,ie+1-i,j,k)
-    enddo
+          Bs(1,is-i,j) = Bs(1,ie+1-i,j)
     enddo
     enddo
 
-    do k=ks,ke
     do j=js-ngh,je+ngh+1
     do i=1,ngh
-          Bs(2,is-i,j,k) = Bs(2,ie+1-i,j,k)
-    enddo
+          Bs(2,is-i,j) = Bs(2,ie+1-i,j)
     enddo
     enddo
 
-    do k=ks,ke+1
     do j=js-ngh,je+ngh
     do i=1,ngh
-          Bs(3,is-i,j,k) = Bs(3,ie+1-i,j,k)
-    enddo
+          Bs(3,is-i,j) = Bs(3,ie+1-i,j)
     enddo
     enddo
 
     ! x outer boundary
-    do k=ks,ke
     do j=js-ngh,je+ngh
     do i=1,ngh
-        Q(:,ie+i,j,k) = Q(:,is+i-1,j,k)
-    enddo
+        Q(:,ie+i,j) = Q(:,is+i-1,j)
     enddo
     enddo
 
-    do k=ks,ke
     do j=js-ngh,je+ngh
     do i=1,ngh
-        Bs(1,ie+i+1,j,k) = Bs(1,is+i,j,k)
-    enddo
+        Bs(1,ie+i+1,j) = Bs(1,is+i,j)
     enddo
     enddo
 
-    do k=ks,ke
     do j=js-ngh,je+ngh+1
     do i=1,ngh
-        Bs(2,ie+i,j,k) = Bs(2,is+i-1,j,k)
-    enddo
+        Bs(2,ie+i,j) = Bs(2,is+i-1,j)
     enddo
     enddo
 
-    do k=ks,ke+1
     do j=js-ngh,je+ngh
     do i=1,ngh
-        Bs(3,ie+i,j,k) = Bs(3,is+i-1,j,k)
-    enddo
+        Bs(3,ie+i,j) = Bs(3,is+i-1,j)
     enddo
     enddo
 
     ! y inner boundary
-    do k=ks,ke
     do j=1,ngh
     do i=is-ngh,ie+ngh
-        Q(:,i,js-j,k)  = Q(:,i,je+1-j,k)
-    enddo
+        Q(:,i,js-j)  = Q(:,i,je+1-j)
     enddo
     enddo
 
-    do k=ks,ke
     do j=1,ngh
     do i=is-ngh,ie+ngh+1
-        Bs(1,i,js-j,k) = Bs(1,i,je+1-j,k)
-    enddo
+        Bs(1,i,js-j) = Bs(1,i,je+1-j)
     enddo
     enddo
 
-    do k=ks,ke
     do j=1,ngh
     do i=is-ngh,ie+ngh
-        Bs(2,i,js-j,k) = Bs(2,i,je+1-j,k)
-    enddo
+        Bs(2,i,js-j) = Bs(2,i,je+1-j)
     enddo
     enddo
 
 
-    do k=ks,ke+1
     do j=1,ngh
     do i=is-ngh,ie+ngh
-        Bs(3,i,js-j,k) = Bs(3,i,je+1-j,k)
-    enddo
+        Bs(3,i,js-j) = Bs(3,i,je+1-j)
     enddo
     enddo
 
     ! y outer boundary
-    do k=ks,ke
     do j=1,ngh
     do i=is-ngh,ie+ngh
-       Q(:,i,je+j,k)  = Q(:,i,js+j-1,k)
-    enddo
+       Q(:,i,je+j)  = Q(:,i,js+j-1)
     enddo
     enddo
 
-    do k=ks,ke
     do j=1,ngh
     do i=is-ngh,ie+ngh+1
-          Bs(1,i,je+j,k) = Bs(1,i,js+j-1,k)
-    enddo
-    enddo
-    enddo
-
-    do k=ks,ke
-    do j=1,ngh
-    do i=is-ngh,ie+ngh
-        Bs(2,i,je+j+1,k) = Bs(2,i,js+j,k)
-    enddo
+          Bs(1,i,je+j) = Bs(1,i,js+j-1)
     enddo
     enddo
 
-    do k=ks,ke+1
     do j=1,ngh
     do i=is-ngh,ie+ngh
-        Bs(3,i,je+j,k) = Bs(3,i,js+j-1,k)
+        Bs(2,i,je+j+1) = Bs(2,i,js+j)
     enddo
+    enddo
+
+    do j=1,ngh
+    do i=is-ngh,ie+ngh
+        Bs(3,i,je+j) = Bs(3,i,js+j-1)
     enddo
     enddo
 
     ! boundary condition for the cell centered B field
-    call CellCenterMagneticField(is-ngh, is-1, js-ngh, je+ngh, ks, ke, Bs, Bc)
-    call CellCenterMagneticField(ie+1,   ie+ngh, js-ngh, je+ngh, ks, ke, Bs, Bc)
-    call CellCenterMagneticField(is-ngh, ie+ngh, js-ngh, js-1, ks, ke, Bs, Bc)
-    call CellCenterMagneticField(is-ngh, ie+ngh, je+1, je+ngh, ks, ke, Bs, Bc)
+    call CellCenterMagneticField(is-ngh, is-1,   js-ngh, je+ngh, Bs, Bc)
+    call CellCenterMagneticField(ie+1,   ie+ngh, js-ngh, je+ngh, Bs, Bc)
+    call CellCenterMagneticField(is-ngh, ie+ngh, js-ngh, js-1,   Bs, Bc)
+    call CellCenterMagneticField(is-ngh, ie+ngh, je+1,   je+ngh, Bs, Bc)
 
 return
 end subroutine BoundaryCondition
@@ -396,30 +347,30 @@ end subroutine BoundaryCondition
 !       Output : U
 !-------------------------------------------------------------------
 subroutine Prim2Consv(Q, Bc, U)
-use params, only : is, ie, js, je, ks, ke, &
+use params, only : is, ie, js, je, &
                    IDN, IVX, IVY, IVZ, IPR, &
                    IMX, IMY, IMZ, IEN, gam
 implicit none
-real(8), intent(in) :: Q(:,:,:,:)
-real(8), intent(in) :: Bc(:,:,:,:)
-real(8), intent(out) :: U(:,:,:,:)
-integer::i,j,k
+real(8), intent(in) :: Q(:,:,:)
+real(8), intent(in) :: Bc(:,:,:)
+real(8), intent(out) :: U(:,:,:)
+integer::i,j
 
-        do k=ks,ke
-       !$omp parallel do private(i)
+!$omp parallel do default(none) collapse(2) schedule(static) &
+!$omp shared(Q,Bc,U) &
+!$omp private(i,j)
         do j=js,je
         do i=is,ie
-            U(IDN,i,j,k) = Q(IDN,i,j,k)
-            U(IMX,i,j,k) = Q(IDN,i,j,k)*Q(IVX,i,j,k)
-            U(IMY,i,j,k) = Q(IDN,i,j,k)*Q(IVY,i,j,k)
-            U(IMZ,i,j,k) = Q(IDN,i,j,k)*Q(IVZ,i,j,k)
-            U(IEN,i,j,k) = 0.5d0*Q(IDN,i,j,k)*( Q(IVX,i,j,k)**2 + Q(IVY,i,j,k)**2 + Q(IVZ,i,j,k)**2 ) &
-                       + 0.5d0*( Bc(1,i,j,k)**2 + Bc(2,i,j,k)**2 + Bc(3,i,j,k)**2 ) &
-                       + Q(IPR,i,j,k)/(gam - 1.0d0)
+            U(IDN,i,j) = Q(IDN,i,j)
+            U(IMX,i,j) = Q(IDN,i,j)*Q(IVX,i,j)
+            U(IMY,i,j) = Q(IDN,i,j)*Q(IVY,i,j)
+            U(IMZ,i,j) = Q(IDN,i,j)*Q(IVZ,i,j)
+            U(IEN,i,j) = 0.5d0*Q(IDN,i,j)*( Q(IVX,i,j)**2 + Q(IVY,i,j)**2 + Q(IVZ,i,j)**2 ) &
+                         + 0.5d0*( Bc(1,i,j)**2 + Bc(2,i,j)**2 + Bc(3,i,j)**2 ) &
+                                 + Q(IPR,i,j)/(gam - 1.0d0)
         enddo
         enddo
-       !$omp end parallel do
-        enddo
+!$omp end parallel do
       
 return
 end subroutine Prim2Consv
@@ -429,59 +380,64 @@ end subroutine Prim2Consv
 !       Output : Q
 !-------------------------------------------------------------------
 subroutine Consv2Prim( U, Bs, Q, Bc )
-use params, only : is, ie, js, je, ks, ke, &
+use params, only : is, ie, js, je, &
                    IDN, IVX, IVY, IVZ, IPR, &
                    IMX, IMY, IMZ, IEN, gam
 implicit none
-real(8), intent(in) :: U(:,:,:,:),Bs(:,:,:,:)
-real(8), intent(out) :: Q(:,:,:,:),Bc(:,:,:,:)
-integer::i,j,k
+real(8), intent(in) :: U(:,:,:),Bs(:,:,:)
+real(8), intent(out) :: Q(:,:,:),Bc(:,:,:)
+integer::i,j
 real(8) :: inv_d;
 
-        call CellCenterMagneticField(is, ie, js, je, ks, ke, Bs, Bc)
+        call CellCenterMagneticField(is, ie, js, je, Bs, Bc)
 
-        do k=ks,ke
-       !$omp parallel do private(i, inv_d)
+!$omp parallel default(none) &
+!$omp shared(U,Q,Bc) &
+!$omp private(i,j,inv_d) 
+
+!$omp do collapse(2) schedule(static)
         do j=js,je
         do i=is,ie
-            Q(IDN,i,j,k) = U(IDN,i,j,k)
-            inv_d = 1.0d0/U(IDN,i,j,k)
-            Q(IVX,i,j,k) = U(IMX,i,j,k)*inv_d
-            Q(IVY,i,j,k) = U(IMY,i,j,k)*inv_d
-            Q(IVZ,i,j,k) = U(IMZ,i,j,k)*inv_d
-            Q(IPR,i,j,k) = ( U(IEN,i,j,k) &
-                        - 0.5d0*(U(IMX,i,j,k)**2 + U(IMY,i,j,k)**2 + U(IMZ,i,j,k)**2)*inv_d  &
-                        - 0.5d0*(Bc(1,i,j,k)**2 + Bc(2,i,j,k)**2 + Bc(3,i,j,k)**2) )*(gam-1.0d0)
+            Q(IDN,i,j) = U(IDN,i,j)
+            inv_d = 1.0d0/U(IDN,i,j)
+            Q(IVX,i,j) = U(IMX,i,j)*inv_d
+            Q(IVY,i,j) = U(IMY,i,j)*inv_d
+            Q(IVZ,i,j) = U(IMZ,i,j)*inv_d
+            Q(IPR,i,j) = ( U(IEN,i,j) &
+                        - 0.5d0*(U(IMX,i,j)**2 + U(IMY,i,j)**2 + U(IMZ,i,j)**2)*inv_d  &
+                        - 0.5d0*(Bc(1,i,j)**2 + Bc(2,i,j)**2 + Bc(3,i,j)**2) )*(gam-1.0d0)
         enddo
         enddo
-        !$omp end parallel do
-        enddo
+!$omp end do
+!$omp end parallel
 
 return
 end subroutine Consv2Prim
 !-------------------------------------------------------------------
 !       Cell Surface B field ===> Cell Center B field
 !-------------------------------------------------------------------
-subroutine CellCenterMagneticField(ibeg, ifin, jbeg, jfin, kbeg, kfin, Bs, Bc )
-use params, only : nxtot, nytot, nztot
+subroutine CellCenterMagneticField(ibeg, ifin, jbeg, jfin, Bs, Bc )
+use params, only : nxtot, nytot
 implicit none
-integer, intent(in) :: ibeg, ifin, jbeg, jfin, kbeg, kfin
-real(8), intent(in) :: Bs(3,nxtot,nytot,nztot)
-real(8), intent(out) :: Bc(3,nxtot,nytot,nztot)
-integer::i,j,k
-real(8) :: inv_d;
+integer, intent(in) :: ibeg, ifin, jbeg, jfin
+real(8), intent(in) :: Bs(3,nxtot,nytot)
+real(8), intent(out) :: Bc(3,nxtot,nytot)
+integer::i,j
 
-        do k=kbeg,kfin
-       !$omp parallel do private(i, inv_d)
+!$omp parallel default(none) &
+!$omp shared(Bc,Bs,ibeg,ifin,jbeg,jfin) &
+!$omp private(i,j) 
+
+!$omp do collapse(2) schedule(static)
         do j=jbeg,jfin
         do i=ibeg,ifin
-            Bc(1,i,j,k) = 0.5d0*( Bs(1,i+1,j,k) + Bs(1,i,j,k) )
-            Bc(2,i,j,k) = 0.5d0*( Bs(2,i,j+1,k) + Bs(2,i,j,k) )
-            Bc(3,i,j,k) = 0.5d0*( Bs(3,i,j,k+1) + Bs(3,i,j,k) )
+            Bc(1,i,j) = 0.5d0*( Bs(1,i+1,j) + Bs(1,i,j) )
+            Bc(2,i,j) = 0.5d0*( Bs(2,i,j+1) + Bs(2,i,j) )
+            Bc(3,i,j) = Bs(3,i,j) 
         enddo
         enddo
-        !$omp end parallel do
-        enddo
+!$omp end do
+!$omp end parallel
 
 return
 end subroutine CellCenterMagneticField
@@ -489,32 +445,29 @@ end subroutine CellCenterMagneticField
 !-------------------------------------------------------------------
 !       determine dt 
 !-------------------------------------------------------------------
-real(8) function TimestepControl(xf, yf, zf, Q, Bc )
-use params, only : is, ie, js, je, ks, ke, &
+real(8) function TimestepControl(xf, yf, Q, Bc )
+use params, only : is, ie, js, je, &
                    IDN, IVX, IVY, IVZ, IPR, gam, Ccfl
 implicit none
-real(8), intent(in) :: xf(:), yf(:), zf(:), Q(:,:,:,:), Bc(:,:,:,:)
-real(8)::dtl1,dtl2,dtl3
-real(8)::dtlocal,dtmin,cf
-integer::i,j,k
+real(8), intent(in) :: xf(:), yf(:),  Q(:,:,:), Bc(:,:,:)
+real(8)::dtl1,dtl2
+real(8)::dtmin,cf
+integer::i,j
 
         dtmin=1.0d90
 
-        do k=ks,ke
-     !$omp parallel do private(i,dtl1,dtl2,cf) reduction (min: dtmin)
+!$omp parallel do default(none) collapse(2) schedule(static) &
+!$omp shared(xf,yf,Q,Bc) private(i,j,dtl1,dtl2,cf) reduction(min:dtmin)
         do j=js,je
         do i=is,ie
-            cf = dsqrt( (gam*Q(IPR,i,j,k) + Bc(1,i,j,k)**2 + Bc(2,i,j,k)**2 + Bc(3,i,j,k)**2)/Q(IDN,i,j,k))
+            cf = dsqrt( (gam*Q(IPR,i,j) + Bc(1,i,j)**2 + Bc(2,i,j)**2 + Bc(3,i,j)**2)/Q(IDN,i,j))
          
-            dtl1 =(xf(i+1)-xf(i))/(abs(Q(IVX,i,j,k)) + cf)
-            dtl2 =(yf(j+1)-yf(j))/(abs(Q(IVY,i,j,k)) + cf)
-!            dtlocal = min(dtl1,dtl2)
-!            if(dtlocal .lt. dtmin) dtmin = dtlocal
+            dtl1 =(xf(i+1)-xf(i))/(abs(Q(IVX,i,j)) + cf)
+            dtl2 =(yf(j+1)-yf(j))/(abs(Q(IVY,i,j)) + cf)
             dtmin = min(dtl1,dtl2,dtmin)
         enddo
         enddo
-      !$omp end parallel do
-        enddo
+!$omp end parallel do
 
         TimestepControl = Ccfl* dtmin
 
@@ -530,7 +483,6 @@ implicit none
 real(8),intent(in)::dvp(NVAR),dvm(NVAR)
 integer,intent(in) :: n
 real(8),intent(out)::dv(NVAR)
-real(8) :: sgn
 integer :: i
 
         do i=1,n
@@ -554,250 +506,196 @@ end subroutine vanLeer
 !
 !     Output: flux : the numerical flux estimated at the cell boundary
 !---------------------------------------------------------------------
-subroutine NumericalFlux( dt, xf, yf, zf, Q, Bc, Bs, F, G, H, E)
-use params, only : nxtot, nytot, nztot, NFLX, NVAR, is, ie, js, je, ks, ke, &
+subroutine NumericalFlux( dt, xf, yf, Q, Bc, Bs, F, G, E)
+use params, only : nxtot, nytot, NFLX, NVAR, is, ie, js, je, &
                    IVX, IVY, IVZ, IBX, IBY, IBZ, flag_flux
 implicit none
-real(8), intent(in) :: dt,xf(:), yf(:), zf(:)
-real(8), intent(in) :: Q(:,:,:,:)
-real(8), intent(in) :: Bc(:,:,:,:)
-real(8), intent(in) :: Bs(:,:,:,:)
-real(8), intent(out) :: F(:,:,:,:)
-real(8), intent(out) :: G(:,:,:,:)
-real(8), intent(out) :: H(:,:,:,:)
-real(8), intent(out) :: E(:,:,:,:)
+real(8), intent(in) :: dt,xf(:), yf(:)
+real(8), intent(in) :: Q(:,:,:)
+real(8), intent(in) :: Bc(:,:,:)
+real(8), intent(in) :: Bs(:,:,:)
+real(8), intent(out) :: F(:,:,:)
+real(8), intent(out) :: G(:,:,:)
+real(8), intent(out) :: E(:,:,:)
     
-integer::i,j,k
-real(8),dimension(NFLX,nxtot,nytot,nztot):: Ql,Qr
+integer::i,j
+real(8),dimension(NFLX,nxtot,nytot):: Ql,Qr
 real(8),dimension(NFLX):: flx
 real(8) :: dQm(NVAR), dQp(NVAR), dQmon(NVAR)
-real(8) :: ddmon, dvmon, dpmon
-real(8) :: Qltest(NFLX), Qrtest(NFLX);
     
-real(8),dimension(nxtot,nytot,nztot) :: e2_xf, e3_xf
-real(8),dimension(nxtot,nytot,nztot) :: e1_yf, e3_yf
-real(8),dimension(nxtot,nytot,nztot) :: weight1, weight2, weight3
+real(8),dimension(nxtot,nytot) :: e2_xf, e3_xf
+real(8),dimension(nxtot,nytot) :: e1_yf, e3_yf
+real(8),dimension(nxtot,nytot) :: weight1, weight2
 real(8) :: wghtCT
 
-real(8) :: Etmp(nxtot,nytot,nztot) 
+real(8) :: Etmp(nxtot,nytot) 
 real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
 
+! numerical flux in the x direction
+!$omp parallel default(none) &
+!$omp shared(Q,F,G,Ql,Qr,Bs,Bc,xf,yf,weight1,weight2,e2_xf,e3_xf,e1_yf,e3_yf,dt) &
+!$omp private(i,j,flx,wghtCT,dQp,dQm,dQmon)
     
-!$omp parallel 
-    ! numerical flux in the x direction
-    ! hydro part
-        do k=ks,ke
-      !$omp do private( i, j, dQp, dQm, dQmon )
+! hydro part
+!$omp do collapse(2) schedule(static)
         do j=js-1,je+1
         do i=is-1,ie+1
-            dQp(1:NVAR) = Q(1:NVAR,i+1,j,k) - Q(1:NVAR,i  ,j,k)
-            dQm(1:NVAR) = Q(1:NVAR,i  ,j,k) - Q(1:NVAR,i-1,j,k)
+            dQp(1:NVAR) = Q(1:NVAR,i+1,j) - Q(1:NVAR,i  ,j)
+            dQm(1:NVAR) = Q(1:NVAR,i  ,j) - Q(1:NVAR,i-1,j)
     
             call vanLeer(NVAR, dQp, dQm, dQmon)
     
-             ! Ql(i,j,k) --> W_(i-1/2,j,k)
-             ! Qr(i,j,k) --> W_(i-1/2,j,k)
-            Ql(1:NVAR,i+1,j,k) = Q(1:NVAR,i,j,k) + 0.5d0*dQmon(1:NVAR)
-            Qr(1:NVAR,i  ,j,k) = Q(1:NVAR,i,j,k) - 0.5d0*dQmon(1:NVAR)
+             ! Ql(i,j) --> W_(i-1/2,j)
+             ! Qr(i,j) --> W_(i-1/2,j)
+            Ql(1:NVAR,i+1,j) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
+            Qr(1:NVAR,i  ,j) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
 
         enddo
         enddo
-      !$omp end do
-        enddo
+!$omp end do
     
-        ! B field part
-        do k=ks,ke
-      !$omp do private( i, dQp, dQm, dQmon )
+! B field part
+!$omp do collapse(2) schedule(static)
         do j=js-1,je+1
         do i=is-1,ie+1
-            dQp(1:3) = Bc(1:3,i+1,j,k) - Bc(1:3,i  ,j,k)
-            dQm(1:3) = Bc(1:3,i  ,j,k) - Bc(1:3,i-1,j,k)
+            dQp(1:3) = Bc(1:3,i+1,j) - Bc(1:3,i  ,j)
+            dQm(1:3) = Bc(1:3,i  ,j) - Bc(1:3,i-1,j)
     
             call vanLeer(3, dQp, dQm, dQmon)
     
-             ! Ql(i,j,k) --> W_(i-1/2,j,k)
-             ! Qr(i,j,k) --> W_(i-1/2,j,k)
-            Ql(NVAR+1:NFLX,i+1,j,k) = Bc(1:3,i,j,k) + 0.5d0*dQmon(1:3)
-            Qr(NVAR+1:NFLX,i  ,j,k) = Bc(1:3,i,j,k) - 0.5d0*dQmon(1:3)
+             ! Ql(i,j) --> W_(i-1/2,j)
+             ! Qr(i,j) --> W_(i-1/2,j)
+            Ql(NVAR+1:NFLX,i+1,j) = Bc(1:3,i,j) + 0.5d0*dQmon(1:3)
+            Qr(NVAR+1:NFLX,i  ,j) = Bc(1:3,i,j) - 0.5d0*dQmon(1:3)
         enddo
         enddo
-      !$omp end do
-        enddo
+!$omp end do
     
-        if (flag_flux == 1 ) then
-            do k=ks,ke
-           !$omp do private( i, flx, wghtCT )
-            do j=js-1,je+1
-            do i=is,ie+1
-                call HLL(1,Ql(:,i,j,k),Qr(:,i,j,k),Bs(1,i,j,k),dt,xf(i+1)-xf(i),flx,wghtCT)
+!$omp do collapse(2) schedule(static)
+        do j=js-1,je+1
+        do i=is,ie+1
+                if (flag_flux == 1 ) then 
+                    call HLL(1,Ql(:,i,j),Qr(:,i,j),Bs(1,i,j),dt,xf(i+1)-xf(i),flx,wghtCT)
+                else 
+                    call HLLD(1,Ql(:,i,j),Qr(:,i,j),Bs(1,i,j),dt,xf(i+1)-xf(i),flx,wghtCT)
+                endif
         
-                 F(1:NVAR,i,j,k)  = flx(1:NVAR)
-                 e3_xf(i,j,k) =  -flx(IBY)
-                 e2_xf(i,j,k) =  +flx(IBZ)
+                 F(1:NVAR,i,j)  = flx(1:NVAR)
+                 e3_xf(i,j) =  -flx(IBY)
+                 e2_xf(i,j) =  +flx(IBZ)
 
-!                 if(flx(IDN).ne.flx(IDN)) then
-!                     print*,i,j,k,flx(IDN),Ql(i,j,k,IDN),Qr(i,j,k,IDN)
-!                 endif
-        
-                 weight1(i,j,k) = wghtCT
-            enddo
-            enddo
-          !$omp end do
-            enddo
-        else if (flag_flux == 2 ) then
-            do k=ks,ke
-           !$omp do private( i, flx, wghtCT )
-            do j=js-1,je+1
-            do i=is,ie+1
-                call HLLD(1,Ql(:,i,j,k),Qr(:,i,j,k),Bs(1,i,j,k),dt,xf(i+1)-xf(i),flx,wghtCT)
-        
-                 F(1:NVAR,i,j,k)  = flx(1:NVAR)
-                 e3_xf(i,j,k) =  -flx(IBY)
-                 e2_xf(i,j,k) =  +flx(IBZ)
-
-!                 if(flx(IDN).ne.flx(IDN)) then
-!                     print*,i,j,k,flx(IDN),Ql(i,j,k,IDN),Qr(i,j,k,IDN)
-!                 endif
-        
-        
-                 weight1(i,j,k) = wghtCT
-            enddo
-            enddo
-          !$omp end do
-            enddo
-        end if 
+                 weight1(i,j) = wghtCT
+        enddo
+        enddo
+!$omp end do
     
     
-          ! numerical flux in the y direction
-          do k=ks,ke
-      !$omp do private( i, dQp, dQm, dQmon )
+! numerical flux in the y direction
+!$omp do collapse(2) schedule(static)
           do j=js-1,je+1
           do i=is-1,ie+1
-             dQp(1:NVAR) = Q(1:NVAR,i,j+1,k) - Q(1:NVAR,i,j  ,k)
-             dQm(1:NVAR) = Q(1:NVAR,i,j  ,k) - Q(1:NVAR,i,j-1,k)
+             dQp(1:NVAR) = Q(1:NVAR,i,j+1) - Q(1:NVAR,i,j  )
+             dQm(1:NVAR) = Q(1:NVAR,i,j  ) - Q(1:NVAR,i,j-1)
     
              call vanLeer(NVAR, dQp, dQm, dQmon)
     
-             ! Ql(i,j,k) --> W_(i-1/2,j,k)
-             ! Qr(i,j,k) --> W_(i-1/2,j,k)
-             Ql(1:NVAR,i,j+1,k) = Q(1:NVAR,i,j,k) + 0.5d0*dQmon(1:NVAR)
-             Qr(1:NVAR,i,j  ,k) = Q(1:NVAR,i,j,k) - 0.5d0*dQmon(1:NVAR)
+             ! Ql(i,j) --> W_(i-1/2,j)
+             ! Qr(i,j) --> W_(i-1/2,j)
+             Ql(1:NVAR,i,j+1) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
+             Qr(1:NVAR,i,j  ) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
           enddo
           enddo
-          !$omp end do
-          enddo
+!$omp end do
     
-          ! B field part
-          do k=ks,ke
-      !$omp do private( i, dQp, dQm, dQmon )
+! B field part
+!$omp do collapse(2) schedule(static)
           do j=js-1,je+1
           do i=is-1,ie+1
-             dQp(1:3) = Bc(1:3,i,j+1,k) - Bc(1:3,i,j  ,k)
-             dQm(1:3) = Bc(1:3,i,j  ,k) - Bc(1:3,i,j-1,k)
+             dQp(1:3) = Bc(1:3,i,j+1) - Bc(1:3,i,j  )
+             dQm(1:3) = Bc(1:3,i,j  ) - Bc(1:3,i,j-1)
     
              call vanLeer(3, dQp, dQm, dQmon)
     
-             ! Ql(i,j,k) --> W_(i-1/2,j,k)
-             ! Qr(i,j,k) --> W_(i-1/2,j,k)
-             Ql(NVAR+1:NFLX,i,j+1,k) = Bc(1:3,i,j,k) + 0.5d0*dQmon(1:3)
-             Qr(NVAR+1:NFLX,i,j  ,k) = Bc(1:3,i,j,k) - 0.5d0*dQmon(1:3)
+             ! Ql(i,j) --> W_(i-1/2,j)
+             ! Qr(i,j) --> W_(i-1/2,j)
+             Ql(NVAR+1:NFLX,i,j+1) = Bc(1:3,i,j) + 0.5d0*dQmon(1:3)
+             Qr(NVAR+1:NFLX,i,j  ) = Bc(1:3,i,j) - 0.5d0*dQmon(1:3)
           enddo
           enddo
-          !$omp end do
-          enddo
+!$omp end do
     
-        if( flag_flux == 1 ) then
-          do k=ks,ke
-         !$omp do private( i, flx, wghtCT )
+!$omp do collapse(2) schedule(static)
           do j=js,je+1
           do i=is-1,ie+1
-             call HLL(2,Ql(:,i,j,k),Qr(:,i,j,k),Bs(2,i,j,k),dt,yf(j+1) - yf(j), flx,wghtCT)
+              if( flag_flux == 1 ) then 
+                  call HLL(2,Ql(:,i,j),Qr(:,i,j),Bs(2,i,j),dt,yf(j+1) - yf(j), flx,wghtCT)
+              else 
+                  call HLLD(2,Ql(:,i,j),Qr(:,i,j),Bs(2,i,j),dt,yf(j+1) - yf(j), flx,wghtCT)
+              endif
     
-             G(1:NVAR,i,j,k) = flx(1:NVAR)
-             e1_yf(i,j,k) =  - flx(IBZ)
-             e3_yf(i,j,k) =    flx(IBX)
+             G(1:NVAR,i,j) = flx(1:NVAR)
+             e1_yf(i,j) =  - flx(IBZ)
+             e3_yf(i,j) =    flx(IBX)
     
-             weight2(i,j,k) = wghtCT
+             weight2(i,j) = wghtCT
           enddo
           enddo
-          !$omp end do
-          enddo
-        else if (flag_flux == 2 ) then
-          do k=ks,ke
-         !$omp do private( i, flx, wghtCT )
-          do j=js,je+1
-          do i=is-1,ie+1
-             call HLLD(2,Ql(:,i,j,k),Qr(:,i,j,k),Bs(2,i,j,k),dt,yf(j+1) - yf(j), flx,wghtCT)
-
-    
-             G(1:NVAR,i,j,k) = flx(1:NVAR)
-             e1_yf(i,j,k) =  - flx(IBZ)
-             e3_yf(i,j,k) =    flx(IBX)
-    
-    
-             weight2(i,j,k) = wghtCT
-          enddo
-          enddo
-          !$omp end do
-          enddo
-        endif
-
+!$omp end do
 !$omp end parallel
-    
-!       call ElectricField( Q, Bc, e2_xf, e3_xf, e3_yf, e1_yf, weight1, weight2, E )
 
-!$omp parallel
-      do k=ks,ke
-      !$omp do private(i)
+!$omp parallel default(none) &
+!$omp shared(Q,Bc,Etmp) &
+!$omp private(i,j) 
+    
+!$omp do collapse(2) schedule(static)
       do j=js-1, je+1
       do i=is-1, ie+1
-           Etmp(i,j,k) = Q(IVY,i,j,k)*Bc(1,i,j,k) - Q(IVX,i,j,k)*Bc(2,i,j,k)
+           Etmp(i,j) = Q(IVY,i,j)*Bc(1,i,j) - Q(IVX,i,j)*Bc(2,i,j)
       enddo
       enddo
-      !$omp end do 
-      enddo
+!$omp end do 
+!$omp end parallel
 
-      !$omp do private(i)
+!$omp parallel default(none) &
+!$omp shared(Q,Bc,E,Etmp,weight1,weight2,e3_yf,e3_xf,e2_xf,e1_yf) &
+!$omp private(i,j,de3_l1,de3_l2,de3_r1,de3_r2) 
+
+!$omp do collapse(2) schedule(static)
       do j=js, je
       do i=is, ie+1
-           E(2,i,j,ke+1) = e2_xf(i,j,ks)
-           E(2,i,j,ks  ) = e2_xf(i,j,ks)
+           E(2,i,j) = e2_xf(i,j)
       enddo
       enddo
-      !$omp end do 
+!$omp end do 
 
-      !$omp do private(i)
+!$omp do collapse(2) schedule(static)
       do j=js, je+1
       do i=is, ie
-           E(1,i,j,ke+1) = e1_yf(i,j,ks)
-           E(1,i,j,ks  ) = e1_yf(i,j,ks)
+           E(1,i,j) = e1_yf(i,j)
       enddo
       enddo
-      !$omp end do 
+!$omp end do 
 
-
-      do k=ks,ke
-      !$omp do private(i, de3_l2, de3_r2, de3_l1, de3_r1 )
+!$omp do collapse(2) schedule(static)
       do j=js, je+1
       do i=is, ie+1
-          de3_l2 = (1.0d0-weight1(i,j-1,k))*(e3_yf(i  ,j,k) - Etmp(i  ,j-1,k)) + &
-                   (      weight1(i,j-1,k))*(e3_yf(i-1,j,k) - Etmp(i-1,j-1,k))
+          de3_l2 = (1.0d0-weight1(i,j-1))*(e3_yf(i  ,j) - Etmp(i  ,j-1)) + &
+                   (      weight1(i,j-1))*(e3_yf(i-1,j) - Etmp(i-1,j-1))
 
-          de3_r2 = (1.0d0-weight1(i,j  ,k))*(e3_yf(i  ,j,k) - Etmp(i  ,j  ,k)) + &
-                   (      weight1(i,j  ,k))*(e3_yf(i-1,j,k) - Etmp(i-1,j  ,k))
+          de3_r2 = (1.0d0-weight1(i,j  ))*(e3_yf(i  ,j) - Etmp(i  ,j  )) + &
+                   (      weight1(i,j  ))*(e3_yf(i-1,j) - Etmp(i-1,j  ))
 
-          de3_l1 = (1.0d0-weight2(i-1,j,k))*(e3_xf(i,j  ,k) - Etmp(i-1,j  ,k)) + &
-                   (      weight2(i-1,j,k))*(e3_xf(i,j-1,k) - Etmp(i-1,j-1,k))
+          de3_l1 = (1.0d0-weight2(i-1,j))*(e3_xf(i,j  ) - Etmp(i-1,j  )) + &
+                   (      weight2(i-1,j))*(e3_xf(i,j-1) - Etmp(i-1,j-1))
 
-          de3_r1 = (1.0d0-weight2(i  ,j,k))*(e3_xf(i,j  ,k) - Etmp(i  ,j  ,k)) + &
-                   (      weight2(i  ,j,k))*(e3_xf(i,j-1,k) - Etmp(i  ,j-1,k))
+          de3_r1 = (1.0d0-weight2(i  ,j))*(e3_xf(i,j  ) - Etmp(i  ,j  )) + &
+                   (      weight2(i  ,j))*(e3_xf(i,j-1) - Etmp(i  ,j-1))
 
-         E(3,i,j,k) = 0.25d0*( de3_l1 + de3_r1 + de3_l2 + de3_r2 + &
-                          e3_yf(i-1,j,k) + e3_yf(i,j,k) + e3_xf(i,j-1,k) + e3_xf(i,j,k))
+         E(3,i,j) = 0.25d0*( de3_l1 + de3_r1 + de3_l2 + de3_r2 + &
+                          e3_yf(i-1,j) + e3_yf(i,j) + e3_xf(i,j-1) + e3_xf(i,j))
       enddo
       enddo
-      !$omp end do 
-      enddo
+!$omp end do 
 
 !$omp end parallel
 
@@ -835,12 +733,9 @@ integer :: IVpara, IVperp1, IVperp2
 integer :: IBpara, IBperp1, IBperp2
 real(8):: Ul(NFLX), Ur(NFLX)
 real(8):: Fl(NFLX), Fr(NFLX)
-real(8):: Ust(NFLX)
-real(8):: Fst(NFLX)
 real(8):: cfl,cfr
 real(8):: sl, sr
 real(8):: pbl, pbr, ptotl, ptotr, v_over_c
-integer :: i, n
 
       if( idir == 1 ) then
            IVpara  = IVX
@@ -914,8 +809,6 @@ integer :: i, n
 !          sr = max(Ql(IVX),Qr(IVX)) + max(cfl,cfr)
           sl = min(Ql(IVpara) - cfl,Qr(IVpara) - cfr)
           sr = max(Ql(IVpara) + cfl,Qr(IVpara) + cfr)
-!          Fst(:)  = (sr*Fl(:) - sl*Fr(:) + sl*sr*( Ur(:) - Ul(:) ))/(sr - sl)
-!          Ust(:) = ( sr*Ur(:) - sl*Ul(:) - Fr(:) + Fl(:) )/(sr - sl)
 
           if( sl > 0.0d0 ) then
                flx(:) = Fl(:)
@@ -970,12 +863,11 @@ real(8),intent(in) :: b1
 real(8),intent(out) :: flx(NFLX)
 real(8),intent(out) :: wghtCT
 integer :: IVpara, IVperp1, IVperp2
-integer :: IBpara, IBperp1, IBperp2, id
+integer :: IBpara, IBperp1, IBperp2
 real(8):: Ul(NFLX), Ur(NFLX)
 real(8):: Ulst(NFLX), Urst(NFLX)
 real(8):: Uldst(NFLX), Urdst(NFLX)
 real(8):: Fl(NFLX), Fr(NFLX)
-real(8):: test(NFLX)
 real(8):: cfl,cfr
 real(8):: S0, S1, S2, S3, S4
 real(8):: pbl, pbr, ptotl, ptotr
@@ -983,7 +875,7 @@ real(8) :: sqrtdl, sqrtdr, v_dot_B_stl, v_dot_B_str
 real(8) :: Ulst_d_inv, Urst_d_inv, sum_sqrtd_inv, tmp
 real(8) :: ptot_stl, ptot_str,ptot_st, Cl, Cr, Cml, Cmr, Cml_inv, Cmr_inv, bxsgn
 real(8) :: v_over_c
-integer :: i, n
+
       Fl = 0.0d0
       Fr = 0.0d0
       Ul = 0.0d0
@@ -1178,14 +1070,6 @@ integer :: i, n
              Urdst(IEN) = Urst(IEN) + sqrtdr*bxsgn*(v_dot_B_str - tmp)
          endif
 
-!         test = (S4 - S3)*Urst + (S3 - S2)*Urdst + (S2 - S1)*Uldst + (S1 - S0)*Ulst - S4*Ur + S0*Ul + Fr - Fl
-!         do id=1,NFLX
-!         if( abs(test(id)) > 1.0d-10 ) then
-!         print*,test(id)
-!         stop
-!         endif
-!         enddo
-         
 
     !--- Step 6.  Compute flux
           if( S0 >= 0.0d0 ) then
@@ -1208,152 +1092,61 @@ integer :: i, n
 
 return
 end subroutine HLLD
-!---------------------------------------------------------------------
-!     ElectricField
-!---------------------------------------------------------------------
-!     computes the numerical flux at the cell boundary 
-!
-!     Input: Q: primitive variables at the cell center
-!
-!     Input: B: magnetic fields
-!
-!     Output: flux : the numerical flux estimated at the cell boundary
-!---------------------------------------------------------------------
-subroutine ElectricField( Q, Bc, e2_xf, e3_xf, e3_yf, e1_yf, weight1, weight2, E )
-use params, only : nxtot, nytot, nztot, is, ie, js, je, ks, ke, IVX, IVY, IVZ
-implicit none
-integer::i,j,k
-real(8), intent(in)  :: Q(:,:,:,:), Bc(:,:,:,:)
-real(8), intent(in)  :: e2_xf(:,:,:)
-real(8), intent(in)  :: e3_xf(:,:,:)
-real(8), intent(in)  :: e1_yf(:,:,:)
-real(8), intent(in)  :: e3_yf(:,:,:)
-real(8), intent(in)  :: weight1(:,:,:)
-real(8), intent(in)  :: weight2(:,:,:)
-real(8), intent(out) :: E(:,:,:,:)
-real(8) :: Etmp(nxtot,nytot,nztot) 
-real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
-
-!$omp parallel
-      do k=ks,ke
-      !$omp do private(i)
-      do j=js-1, je+1
-      do i=is-1, ie+1
-           Etmp(i,j,k) = Q(IVY,i,j,k)*Bc(1,i,j,k) - Q(IVX,i,j,k)*Bc(2,i,j,k)
-      enddo
-      enddo
-      !$omp end do 
-      enddo
-
-      !$omp do private(i)
-      do j=js, je
-      do i=is, ie+1
-           E(2,i,j,ke+1) = e2_xf(i,j,ks)
-           E(2,i,j,ks  ) = e2_xf(i,j,ks)
-      enddo
-      enddo
-      !$omp end do 
-
-      !$omp do private(i)
-      do j=js, je+1
-      do i=is, ie
-           E(1,i,j,ke+1) = e1_yf(i,j,ks)
-           E(1,i,j,ks  ) = e1_yf(i,j,ks)
-      enddo
-      enddo
-      !$omp end do 
-
-
-      do k=ks,ke
-      !$omp do private(i, de3_l2, de3_r2, de3_l1, de3_r1 )
-      do j=js, je+1
-      do i=is, ie+1
-          de3_l2 = (1.0d0-weight1(i,j-1,k))*(e3_yf(i  ,j,k) - Etmp(i  ,j-1,k)) + &
-                   (      weight1(i,j-1,k))*(e3_yf(i-1,j,k) - Etmp(i-1,j-1,k))
-
-          de3_r2 = (1.0d0-weight1(i,j  ,k))*(e3_yf(i  ,j,k) - Etmp(i  ,j  ,k)) + &
-                   (      weight1(i,j  ,k))*(e3_yf(i-1,j,k) - Etmp(i-1,j  ,k))
-
-          de3_l1 = (1.0d0-weight2(i-1,j,k))*(e3_xf(i,j  ,k) - Etmp(i-1,j  ,k)) + &
-                   (      weight2(i-1,j,k))*(e3_xf(i,j-1,k) - Etmp(i-1,j-1,k))
-
-          de3_r1 = (1.0d0-weight2(i  ,j,k))*(e3_xf(i,j  ,k) - Etmp(i  ,j  ,k)) + &
-                   (      weight2(i  ,j,k))*(e3_xf(i,j-1,k) - Etmp(i  ,j-1,k))
-
-         E(3,i,j,k) = 0.25d0*( de3_l1 + de3_r1 + de3_l2 + de3_r2 + &
-                          e3_yf(i-1,j,k) + e3_yf(i,j,k) + e3_xf(i,j-1,k) + e3_xf(i,j,k))
-      enddo
-      enddo
-      !$omp end do 
-      enddo
-
-!$omp end parallel
-
-return
-end subroutine ElectricField 
 !!=====================================================================
-subroutine UpdateConsv( dt1, xf, xv, yf, yv, zf, zv, F, G, H, E, Q, Uo, Bso, U, Bs)
-use params, only : is, ie, js, je, ks, ke
+subroutine UpdateConsv( dt1, xf, xv, yf, yv, F, G, E, Q, Uo, Bso, U, Bs)
+use params, only : is, ie, js, je
 implicit none
 real(8), intent(in) :: dt1
-real(8), intent(in)  :: xf(:), yf(:), zf(:)
-real(8), intent(in)  :: xv(:), yv(:), zv(:)
-real(8), intent(in)  :: F(:,:,:,:), G(:,:,:,:), H(:,:,:,:)
-real(8), intent(in)  :: Uo(:,:,:,:), Q(:,:,:,:), Bso(:,:,:,:)
-real(8), intent(out) :: U(:,:,:,:), Bs(:,:,:,:), E(:,:,:,:)
+real(8), intent(in)  :: xf(:), yf(:)
+real(8), intent(in)  :: xv(:), yv(:)
+real(8), intent(in)  :: F(:,:,:), G(:,:,:)
+real(8), intent(in)  :: Uo(:,:,:), Q(:,:,:), Bso(:,:,:)
+real(8), intent(out) :: U(:,:,:), Bs(:,:,:), E(:,:,:)
+integer::i,j
 
-real(8) :: divB 
-integer::i,n,j,k
+!$omp parallel default(none) &
+!$omp shared(U,Uo,Bs,Bso,F,G,E,xf,yf,xv,yv,dt1) &
+!$omp private(i,j) 
 
-!$omp parallel 
-
-      !$omp do private( i,j,k )
-      do k=ks,ke
+!$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is,ie
-         U(:,i,j,k) = Uo(:,i,j,k) + dt1*(- F(:,i+1,j,k) + F(:,i,j,k))/(xf(i+1)-xf(i)) &
-                                  + dt1*(- G(:,i,j+1,k) + G(:,i,j,k))/(yf(j+1)-yf(j)) 
+         U(:,i,j) = Uo(:,i,j) + dt1*(- F(:,i+1,j) + F(:,i,j))/(xf(i+1)-xf(i)) &
+                                  + dt1*(- G(:,i,j+1) + G(:,i,j))/(yf(j+1)-yf(j)) 
       enddo
       enddo
-      enddo
-      !$omp end do
+!$omp end do
 
-      do k=ks,ke
-      !$omp do private( i )
+!$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is,ie+1
-           Bs(1,i,j,k) = Bso(1,i,j,k) &
-                       - dt1*(E(3,i,j+1,k) - E(3,i,j,k))/(yv(j+1) - yv(j))
+           Bs(1,i,j) = Bso(1,i,j) &
+                       - dt1*(E(3,i,j+1) - E(3,i,j))/(yv(j+1) - yv(j))
       enddo
       enddo
-      !$omp end do
-      enddo
+!$omp end do
 
-      do k=ks,ke
-      !$omp do private( i )
+!$omp do collapse(2) schedule(static)
       do j=js,je+1
       do i=is,ie
-           Bs(2,i,j,k) = Bso(2,i,j,k) &
-                       + dt1*(E(3,i+1,j,k) - E(3,i,j,k))/(xv(i+1) - xv(i))
+           Bs(2,i,j) = Bso(2,i,j) &
+                       + dt1*(E(3,i+1,j) - E(3,i,j))/(xv(i+1) - xv(i))
       enddo
       enddo
-      !$omp end do
-      enddo
+!$omp end do
 
-      do k=ks,ke+1
-      !$omp do private( i )
+!$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is,ie
-           Bs(3,i,j,k) = Bso(3,i,j,k) &
-                       - dt1*(E(2,i+1,j,k) - E(2,i,j,k))/(xf(i+1) - xf(i)) &
-                       + dt1*(E(1,i,j+1,k) - E(1,i,j,k))/(yf(j+1) - yf(j))
+           Bs(3,i,j) = Bso(3,i,j) &
+                       - dt1*(E(2,i+1,j) - E(2,i,j))/(xf(i+1) - xf(i)) &
+                       + dt1*(E(1,i,j+1) - E(1,i,j))/(yf(j+1) - yf(j))
       enddo
       enddo
-      !$omp end do
-      enddo
+!$omp end do
 
 
-      !$omp end parallel
+!$omp end parallel
 
 return
 end subroutine UpdateConsv
@@ -1364,16 +1157,16 @@ end subroutine UpdateConsv
 !       flag = .true.  --> output snapshot when calling this subroutine
 !       flag = .false. --> output snapshot every dtsnap
 !-------------------------------------------------------------------
-subroutine Output( time, flag, dirname, xf, xv, yf, yv, Q, Bc )
-use params, only : nx, ny, nz, is, ie, js, je, ks, ke, NFLX, NVAR, unitsnap, unitbin, &
+subroutine Output( time, flag, dirname, xv, yv, Q, Bc )
+use params, only : nx, ny, is, ie, js, je, NFLX, NVAR, unitsnap, unitbin, &
                   IDN, IVX, IVY, IVZ, IPR, dtsnap, flag_binary
 implicit none
 real(8), intent(in) :: time
 logical, intent(in) :: flag 
 character(20), intent(in) :: dirname 
-real(8), intent(in) :: xf(:), xv(:), yf(:), yv(:)
-real(8), intent(in) :: Q(:,:,:,:), Bc(:,:,:,:)
-integer::i,j,k
+real(8), intent(in) :: xv(:), yv(:)
+real(8), intent(in) :: Q(:,:,:), Bc(:,:,:)
+integer::i,j
 character(100)::filename
 real(8), save :: tsnap = - dtsnap
 integer, save :: nsnap = 0
@@ -1393,20 +1186,18 @@ integer, save :: nsnap = 0
         write(unitsnap) NFLX-NVAR
         write(unitsnap) xv(is:ie)
         write(unitsnap) yv(js:je)
-        write(unitsnap) real(Q(1:NVAR,is:ie,js:je,ks:ke)) ! single precision
-        write(unitsnap) real(Bc(1:3,is:ie,js:je,ks:ke)) ! single precision
+        write(unitsnap) real(Q(1:NVAR,is:ie,js:je)) ! single precision
+        write(unitsnap) real(Bc(1:3,is:ie,js:je)) ! single precision
         close(unitsnap)
     else 
           filename = trim(dirname)//"/snap"//trim(filename)//".dat"
           open(unitbin,file=filename,form='formatted',action="write")
           write(unitbin,*) "# time = ",time
           write(unitbin,*) "#nx, ny = ", nx, ny
-          do k=ks,ke
           do j=js,je
           do i=is,ie
-              write(unitbin,*) xv(i), yv(j), Q(IDN,i,j,k), Q(IVX,i,j,k), Q(IVY,i,j,k), Q(IVZ,i,j,k), Q(IPR,i,j,k), &
-                  Bc(1,i,j,k), Bc(2,i,j,k), Bc(3,i,j,k)
-          enddo
+              write(unitbin,*) xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), Q(IPR,i,j), &
+                  Bc(1,i,j), Bc(2,i,j), Bc(3,i,j)
           enddo
           enddo
      endif
@@ -1438,22 +1229,17 @@ end subroutine makedirs
 !       Output : phys_evo(nevo)
 !-------------------------------------------------------------------
 subroutine RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
-use params, only : is, ie, js, je, ks, ke, gam
+use params, only : is, ie, js, je, gam
 implicit none
-real(8), intent(in) :: xv(:), yv(:), Q(:,:,:,:), Bc(:,:,:,:), Bs(:,:,:,:)
+real(8), intent(in) :: xv(:), yv(:), Q(:,:,:), Bc(:,:,:), Bs(:,:,:)
 real(8), intent(out) :: phys_evo(:)
-integer::i,j,k
-real(8) :: dvy, er_divBc, er_divBs
+integer::i,j
 
-      do k=ks,ke
       do j=js,je
       do i=is,ie
       enddo
       enddo
-      enddo
       phys_evo(1) = 0.0d0
-      phys_evo(2) = 0.0d0
-      phys_evo(3) = 0.0d0
       
 return
 end subroutine RealtimeAnalysis
