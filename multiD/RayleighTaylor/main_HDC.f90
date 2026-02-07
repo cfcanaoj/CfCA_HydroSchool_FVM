@@ -1,43 +1,30 @@
-program main
-!$ use omp_lib
-implicit none
+module params
 
-! time evolution
-integer :: ntime = 0    ! counter of the timestep
-real(8) :: time = 0.0d0  ! time 
-real(8) :: dt   = 0.0d0  ! time width
-real(8),parameter:: timemax=25.0d0 ! simulation end time
+real(8), parameter:: timemax=25d0 ! simulation end time
 
 ! option
-integer, parameter :: flag_HDC = 0 ! 1 --> HDC on , 0 --> HDC off
+integer, parameter :: flag_HDC  = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter::nx=50        ! the number of grids in the simulation box
+integer,parameter::nx=50         ! the number of grids in the simulation box
 integer,parameter::ny=150 ! the number of grids in the simulation box
-integer,parameter::nz=1          ! the number of grids in the simulation box
 integer,parameter::ngh=2         ! the number of ghost cells
 integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
 integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::nztot=1 ! the total number of grids including ghost cells
 integer,parameter::is=ngh+1         ! the index of the leftmost grid
 integer,parameter::js=ngh+1         ! the index of the leftmost grid
-integer,parameter::ks=1         ! the index of the leftmost grid
 integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
 integer,parameter::je=ny+ngh     ! the index of the rightmost grid
-integer,parameter::ke=1     ! the index of the rightmost grid
 real(8),parameter::xmin=-0.25d0,xmax=0.25d0
 real(8),parameter::ymin=-0.75d0,ymax=0.75d0
-real(8),parameter::zmin=0.0d0,zmax=1.0d0
 
 real(8),parameter::Ccfl=0.4d0
 real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
 
-real(8) ch       ! advection speed of divergence B
 real(8), parameter :: alpha = 0.1d0    ! decay timescale of divergence B
 
 real(8),parameter::grav_accy=-0.1d0  ! gravitaional acceleration
-
 
 ! indices of the conservative variables
 integer, parameter :: IDN = 1
@@ -58,73 +45,79 @@ integer, parameter :: IVY = 3
 integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
+! output 
+character(20),parameter::dirname="hdc" ! directory name
+
+! snapshot
+integer, parameter :: unitsnap = 17
+real(8), parameter :: dtsnap   = 2.0d-1
+logical, parameter :: flag_binary = .true.
+
+! realtime analysis 
+integer, parameter :: nevo = 1
+integer, parameter :: unitevo =11
+
+end module
+
+program main
+!$ use omp_lib
+use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
+implicit none
+include "interfaces_hdc.inc"
+
+! time evolution
+integer :: ntime = 0    ! counter of the timestep
+real(8) :: time = 0.0d0  ! time 
+real(8) :: dt   = 0.0d0  ! time width
 
 
 ! definition of arrays 
 real(8),dimension(nxtot)::xf,xv
 real(8),dimension(nytot)::yf,yv
-real(8),dimension(nztot)::zf,zv
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: Uo
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: U
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: Q
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: F
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: G
-real(8),dimension(NVAR,nxtot,nytot,nztot) :: H
+real(8),dimension(NVAR,nxtot,nytot) :: Uo
+real(8),dimension(NVAR,nxtot,nytot) :: U
+real(8),dimension(NVAR,nxtot,nytot) :: Q
+real(8),dimension(NVAR,nxtot,nytot) :: F
+real(8),dimension(NVAR,nxtot,nytot) :: G
 
-! output 
-character(20),parameter::dirname="nohdc" ! directory name
-
-! snapshot
-integer, parameter :: unitsnap = 17
-real(8), parameter:: dtsnap=2.0d-1
-
-! realtime analysis 
-integer, parameter :: nevo = 2
-integer, parameter :: unitevo =11
 real(8) :: phys_evo(nevo)
-
-!logical :: flag_binary = .False.
-logical :: flag_binary = .true.
-
-
-integer :: i, j,k
-real(8) :: stime
 
       ! make the directory for output
       call makedirs(trim(dirname))
 
       write(6,*) "setup grids and initial condition"
-      call GenerateGrid(xf, xv, yf, yv, zf, zv)
-      call GenerateProblem(xv, yv, zv, Q)
+      call GenerateGrid(xf, xv, yf, yv)
+      call GenerateProblem(xv, yv, Q )
       call Prim2Consv(Q, U)
-      call BoundaryCondition(xf,yf,Q)
-      call Output( .TRUE., flag_binary, dirname, xf, xv, yf, yv, Q )
+      call BoundaryCondition(yf,Q)
+      call Output( time, .TRUE., xv, yv, Q )
 
 
-  write(6,*) "Start the simulation"
-  open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
+   write(6,*) "Start the simulation"
+   open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
       ntime = 1
-      do !ntime=1,ntimemax
-         dt = TimestepControl(xf, yf, zf, Q)
+      mloop: do !ntime=1,ntimemax
+         dt = TimestepControl(xf, yf, Q)
          if( time + dt > timemax ) dt = timemax - time
 
-         Uo(:,:,:,:) = U(:,:,:,:)
+         Uo(:,:,:) = U(:,:,:)
 
-         call NumericalFlux( Q, F, G, H )
-         call UpdateConsv( 0.5d0*dt, xf, yf, zf, F, G, H, Q, U, U )
+         call NumericalFlux( dt, xf, yf, Q, F, G )
+         call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Q, Uo, U )
+         call SrcTerms( 0.5d0*dt, dt, Q, U)
          call Consv2Prim( U, Q )
-         call BoundaryCondition(xf, yf,Q )
-
-         call NumericalFlux( Q, F, G, H )
-         call UpdateConsv( dt, xf, yf, zf, F, G, H, Q, Uo, U )
+         call BoundaryCondition(yf, Q)
+!
+         call NumericalFlux( dt, xf, yf, Q, F, G )
+         call UpdateConsv( dt, xf, yf, F, G, Q, Uo, U )
+         call SrcTerms( dt, dt, Q, U)
          call Consv2Prim( U, Q )
-         call BoundaryCondition( xf, yf, Q )
+         call BoundaryCondition(yf, Q)
 
          time=time+dt
          ntime = ntime+1
-         call Output( .FALSE., flag_binary, dirname, xf, xv, yf, yv, Q)
-!         call Output( .true., xf, xv, yf, yv, Q)
+         call Output( time, .FALSE., xv, yv, Q)
 
          print*, "ntime = ",ntime, "time = ",time, dt
 
@@ -133,24 +126,26 @@ real(8) :: stime
              write(unitevo,*) time, phys_evo(1:nevo)
          endif
 
-         if(time >= timemax) exit 
-      enddo 
+         if(time >= timemax) exit mloop
+      enddo mloop
 
       close(unitevo)
 
+!      call Output( time, .TRUE.,xv, yv, Q)
 
 !      write(6,*) "program has been finished"
-contains
+!contains
+end program
 !-------------------------------------------------------------------
 !       Generate coordiantes
-!       xf,yf,zf --> cell boundary xf(i) <==> x_{i-1/2}
-!       xv,yv,zv --> cell center   xv(i) <==> x_{i}
+!       xf,yf --> cell boundary xf(i) <==> x_{i-1/2}
+!       xv,yv --> cell center   xv(i) <==> x_{i}
 !-------------------------------------------------------------------
-subroutine GenerateGrid(xf, xv, yf, yv, zf, zv)
+subroutine GenerateGrid(xf, xv, yf, yv)
+use params, only : nxtot, nytot, ngh, nx, ny, xmax, xmin, ymax, ymin
 implicit none
 real(8), intent(out) :: xf(:), xv(:)
 real(8), intent(out) :: yf(:), yv(:)
-real(8), intent(out) :: zf(:), zv(:)
 real(8) :: dx,dy
 integer::i,j
 
@@ -165,7 +160,7 @@ integer::i,j
 
       dy=(ymax-ymin)/dble(ny)
       do j=1,nytot
-         yf(j) = dx*(j-(ngh+1))+ymin
+         yf(j) = dy*(j-(ngh+1))+ymin
       enddo
       do j=1,nytot-1
          yv(j) = 0.5d0*(yf(j+1)+yf(j))
@@ -176,17 +171,19 @@ end subroutine GenerateGrid
 !-------------------------------------------------------------------
 !       Generate initial condition of the primitive variables
 !-------------------------------------------------------------------
-subroutine GenerateProblem(xv, yv, zv, Q )
+subroutine GenerateProblem(xv, yv, Q )
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, &
+                   grav_accy,xmax,xmin,ymax,ymin
 implicit none
-integer::i, j, k
-real(8), intent(in ) :: xv(:), yv(:), zv(:)
-real(8), intent(out) :: Q(:,:,:,:)
-real(8) :: pi, den, B0
+real(8), intent(in ) :: xv(:), yv(:)
+real(8), intent(out) :: Q(:,:,:)
+integer::i, j
+real(8) :: pi, B0, den
 
       pi = dacos(-1.0d0)
       B0 = 0.5d0*sqrt( abs(grav_accy)/(2.0*2.0d0*pi) )
 
-      do k=ks,ke
       do j=js,je
       do i=is,ie
            if( yv(j) .lt. 0.0d0 ) then
@@ -194,21 +191,18 @@ real(8) :: pi, den, B0
            else 
                den = 2.0d0
            endif
-           Q(IDN,i,j,k) = den
-           Q(IVX,i,j,k) = 0.0d0
-           Q(IVY,i,j,k) = 0.0d0
-           Q(IVZ,i,j,k) = 0.0d0
-           Q(IBX,i,j,k) = B0 
-           Q(IBY,i,j,k) = 0.0d0
-           Q(IBZ,i,j,k) = 0.0d0
-           Q(IPR,i,j,k) = 2.5d0 + grav_accy*den*yv(j)
+           Q(IDN,i,j) = den
+           Q(IVX,i,j) = 0.0d0
+           Q(IVY,i,j) = 0.0d0
+           Q(IVZ,i,j) = 0.0d0
+           Q(IBX,i,j) = B0 
+           Q(IBY,i,j) = 0.0d0
+           Q(IBZ,i,j) = 0.0d0
+           Q(IPR,i,j) = 2.5d0 + grav_accy*den*yv(j)
 
-           Q(IVY,i,j,k)= 0.01d0/4.0d0 &
-                     & *(-dcos(2.0d0*pi*(xv(i)-(xmax+xmin)/2.0d0)/(xmax-xmin))) &
-                     & *(1.0+cos(2.0d0*pi*(yv(j)-(ymax+ymin)/2.0d0)/(ymax-ymin)))
-!                     & *dexp( - (xv(i) - (x1max+x1min)/2.0d0)**2/(0.1**2) )
-!                     & *(+cos(2.0d0*pi*(xv(i)-(x1max+x1min)/2.0d0)/(x1max-x1min)))
-      enddo
+           Q(IVY,i,j)= 0.01d0/4.0d0 &
+                      *(-dcos(2.0d0*pi*(xv(i)-(xmax+xmin)/2.0d0)/(xmax-xmin))) &
+                      *(1.0+cos(2.0d0*pi*(yv(j)-(ymax+ymin)/2.0d0)/(ymax-ymin)))
       enddo
       enddo
 
@@ -218,59 +212,53 @@ end subroutine GenerateProblem
 !-------------------------------------------------------------------
 !       Boundary Condition of the primitive variables
 !-------------------------------------------------------------------
-subroutine BoundaryCondition(xf, yf, Q)
+subroutine BoundaryCondition(yf,Q)
+use params, only : nxtot, nytot, ngh, is, ie, js, je, &
+                   IDN,IVX,IVY,IVZ,IPR,IBX,IBY,IBZ,IPS,grav_accy
 implicit none
-real(8), intent(inout) :: xf(:), yf(:), Q(:,:,:,:)
-integer::i,j,k,ish
+real(8), intent(in) :: yf(:)
+real(8), intent(inout) :: Q(:,:,:)
+integer::i,j
 
-      do k=ks,ke
       do j=1,nytot-1
       do i=1,ngh
-          Q(:,is-i,j,k)  = Q(:,ie+1-i,j,k)
-      enddo
+          Q(:,is-i,j)  = Q(:,ie+1-i,j)
       enddo
       enddo
 
-      do k=ks,ke
       do j=1,nytot-1
       do i=1,ngh
-
-          Q(:,ie+i,j,k)= Q(:,is+i-1,j,k)
-      enddo
+          Q(:,ie+i,j)= Q(:,is+i-1,j)
       enddo
       enddo
 
-      do k=ks,ke
       do j=1,ngh
       do i=1,nxtot-1
-          Q(IDN,i,js-j,k)  = Q(IDN,i,js-1+j,k)
-          Q(IVX,i,js-j,k)  = Q(IVX,i,js-1+j,k)
-          Q(IVY,i,js-j,k)  = -Q(IVY,i,js-1+j,k)
-          Q(IVZ,i,js-j,k)  = Q(IVZ,i,js-1+j,k)
-          Q(IPR,i,js-j,k)  = Q(IPR,i,js-1+j,k) &
-                           - Q(IDN,i,js-1+j,k)*grav_accy*(2*j-1)*(yf(j+1)-yf(j))
-          Q(IBX,i,js-j,k)  = Q(IBX,i,js-1+j,k)
-          Q(IBY,i,js-j,k)  = Q(IBY,i,js-1+j,k)
-          Q(IBZ,i,js-j,k)  = Q(IBZ,i,js-1+j,k)
-          Q(IPS,i,js-j,k)  = Q(IPS,i,js-1+j,k)
-      enddo
+          Q(IDN,i,js-j)  = Q(IDN,i,js-1+j)
+          Q(IVX,i,js-j)  = Q(IVX,i,js-1+j)
+          Q(IVY,i,js-j)  = -Q(IVY,i,js-1+j)
+          Q(IVZ,i,js-j)  = Q(IVZ,i,js-1+j)
+          Q(IPR,i,js-j)  = Q(IPR,i,js-1+j) &
+                         - Q(IDN,i,js-1+j)*grav_accy*(2*j-1)*(yf(j+1)-yf(j))
+          Q(IBX,i,js-j)  = Q(IBX,i,js-1+j)
+          Q(IBY,i,js-j)  = Q(IBY,i,js-1+j)
+          Q(IBZ,i,js-j)  = Q(IBZ,i,js-1+j)
+          Q(IPS,i,js-j)  = Q(IPS,i,js-1+j)
       enddo
       enddo
 
-      do k=ks,ke
       do j=1,ngh
       do i=1,nxtot-1
-          Q(IDN,i,je+j,k) = Q(IDN,i,je-j+1,k)
-          Q(IVX,i,je+j,k) = Q(IVX,i,je-j+1,k)
-          Q(IVY,i,je+j,k) = Q(IVY,i,je-j+1,k)
-          Q(IVZ,i,je+j,k) = Q(IVZ,i,je-j+1,k)
-          Q(IPR,i,je+j,k) = Q(IPR,i,je-j+1,k) &
-                          + Q(IDN,i,je-j+1,k)*grav_accy*(2*j-1)*(yf(j+1)-yf(j))
-          Q(IBX,i,je+j,k) = Q(IBX,i,je-j+1,k)
-          Q(IBY,i,je+j,k) = Q(IBY,i,je-j+1,k)
-          Q(IBZ,i,je+j,k) = Q(IBZ,i,je-j+1,k)
-          Q(IPS,i,je+j,k) = Q(IPS,i,je-j+1,k)
-      enddo
+          Q(IDN,i,je+j) = Q(IDN,i,je-j+1)
+          Q(IVX,i,je+j) = Q(IVX,i,je-j+1)
+          Q(IVY,i,je+j) = Q(IVY,i,je-j+1)
+          Q(IVZ,i,je+j) = Q(IVZ,i,je-j+1)
+          Q(IPR,i,je+j) = Q(IPR,i,je-j+1) &
+                          + Q(IDN,i,je-j+1)*grav_accy*(2*j-1)*(yf(j+1)-yf(j))
+          Q(IBX,i,je+j) = Q(IBX,i,je-j+1)
+          Q(IBY,i,je+j) = Q(IBY,i,je-j+1)
+          Q(IBZ,i,je+j) = Q(IBZ,i,je-j+1)
+          Q(IPS,i,je+j) = Q(IPS,i,je-j+1)
       enddo
       enddo
 
@@ -282,30 +270,35 @@ end subroutine BoundaryCondition
 !       Output : U
 !-------------------------------------------------------------------
 subroutine Prim2Consv(Q, U)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam
 implicit none
-real(8), intent(in) :: Q(:,:,:,:)
-real(8), intent(out) :: U(:,:,:,:)
-integer::i,j,k
+real(8), intent(in) :: Q(:,:,:)
+real(8), intent(out) :: U(:,:,:)
+integer::i,j
 
-      do k=ks,ke
-     !$omp parallel do private(i,j)
+!$omp parallel default(none) &
+!$omp shared(U,Q) &
+!$omp private(i,j) 
+
+!$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is,ie
-          U(IDN,i,j,k) = Q(IDN,i,j,k)
-          U(IMX,i,j,k) = Q(IDN,i,j,k)*Q(IVX,i,j,k)
-          U(IMY,i,j,k) = Q(IDN,i,j,k)*Q(IVY,i,j,k)
-          U(IMZ,i,j,k) = Q(IDN,i,j,k)*Q(IVZ,i,j,k)
-          U(IEN,i,j,k) = 0.5d0*Q(IDN,i,j,k)*( Q(IVX,i,j,k)**2 + Q(IVY,i,j,k)**2 + Q(IVZ,i,j,k)**2 ) &
-                       + 0.5d0*( Q(IBX,i,j,k)**2 + Q(IBY,i,j,k)**2 + Q(IBZ,i,j,k)**2 ) &
-                       + Q(IPR,i,j,k)/(gam - 1.0d0)
-          U(IBX,i,j,k) = Q(IBX,i,j,k)
-          U(IBY,i,j,k) = Q(IBY,i,j,k)
-          U(IBZ,i,j,k) = Q(IBZ,i,j,k)
-          U(IPS,i,j,k) = Q(IPS,i,j,k)
+          U(IDN,i,j) = Q(IDN,i,j)
+          U(IMX,i,j) = Q(IDN,i,j)*Q(IVX,i,j)
+          U(IMY,i,j) = Q(IDN,i,j)*Q(IVY,i,j)
+          U(IMZ,i,j) = Q(IDN,i,j)*Q(IVZ,i,j)
+          U(IEN,i,j) = 0.5d0*Q(IDN,i,j)*( Q(IVX,i,j)**2 + Q(IVY,i,j)**2 + Q(IVZ,i,j)**2 ) &
+                       + 0.5d0*( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 + Q(IBZ,i,j)**2 ) &
+                       + Q(IPR,i,j)/(gam - 1.0d0)
+          U(IBX,i,j) = Q(IBX,i,j)
+          U(IBY,i,j) = Q(IBY,i,j)
+          U(IBZ,i,j) = Q(IBZ,i,j)
+          U(IPS,i,j) = Q(IPS,i,j)
       enddo
       enddo
-      !$omp end parallel do
-      enddo
+!$omp end do
+!$omp end parallel
       
 return
 end subroutine Prim2Consv
@@ -315,71 +308,67 @@ end subroutine Prim2Consv
 !       Output : Q
 !-------------------------------------------------------------------
 subroutine Consv2Prim( U, Q )
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam
 implicit none
-real(8), intent(in) :: U(:,:,:,:)
-real(8), intent(out) :: Q(:,:,:,:)
-integer::i,j,k
+real(8), intent(in) :: U(:,:,:)
+real(8), intent(out) :: Q(:,:,:)
+integer::i,j
 real(8) :: inv_d;
-real(8) :: stime
-!  stime = omp_get_wtime()
 
-      do k=ks,ke
-     !$omp parallel do private( i, j, inv_d )
+!$omp parallel default(none) &
+!$omp shared(U,Q) &
+!$omp private(i,j,inv_d) 
+
+!$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is,ie
-           Q(IDN,i,j,k) = U(IDN,i,j,k)
-           inv_d = 1.0d0/U(IDN,i,j,k)
-           Q(IVX,i,j,k) = U(IMX,i,j,k)*inv_d
-           Q(IVY,i,j,k) = U(IMY,i,j,k)*inv_d
-           Q(IVZ,i,j,k) = U(IMZ,i,j,k)*inv_d
-           Q(IPR,i,j,k) = ( U(IEN,i,j,k) &
-                        - 0.5d0*(U(IMX,i,j,k)**2 + U(IMY,i,j,k)**2 + U(IMZ,i,j,k)**2)*inv_d  &
-                        - 0.5d0*(U(IBX,i,j,k)**2 + U(IBY,i,j,k)**2 + U(IBZ,i,j,k)**2) )*(gam-1.0d0)
-           Q(IBX,i,j,k) = U(IBX,i,j,k)
-           Q(IBY,i,j,k) = U(IBY,i,j,k)
-           Q(IBZ,i,j,k) = U(IBZ,i,j,k)
-           Q(IPS,i,j,k) = U(IPS,i,j,k)
+           Q(IDN,i,j) = U(IDN,i,j)
+           inv_d = 1.0d0/U(IDN,i,j)
+           Q(IVX,i,j) = U(IMX,i,j)*inv_d
+           Q(IVY,i,j) = U(IMY,i,j)*inv_d
+           Q(IVZ,i,j) = U(IMZ,i,j)*inv_d
+           Q(IPR,i,j) = ( U(IEN,i,j) &
+                        - 0.5d0*(U(IMX,i,j)**2 + U(IMY,i,j)**2 + U(IMZ,i,j)**2)*inv_d  &
+                        - 0.5d0*(U(IBX,i,j)**2 + U(IBY,i,j)**2 + U(IBZ,i,j)**2) )*(gam-1.0d0)
+           Q(IBX,i,j) = U(IBX,i,j)
+           Q(IBY,i,j) = U(IBY,i,j)
+           Q(IBZ,i,j) = U(IBZ,i,j)
+           Q(IPS,i,j) = U(IPS,i,j)
       enddo
       enddo
-      !$omp end parallel do
-      enddo
-!      print*,omp_get_wtime() - stime
+!$omp end do
+!$omp end parallel
 
 return
 end subroutine Consv2Prim
 !-------------------------------------------------------------------
 !       determine dt 
 !-------------------------------------------------------------------
-real(8) function TimestepControl(xf, yf, zf, Q)
+real(8) function TimestepControl(xf, yf, Q)
+use params, only : IDN, IVX, IVY, IPR, IBX, IBY, IBZ, is, ie, js, je, Ccfl, gam
 implicit none
-real(8), intent(in) :: xf(:), yf(:), zf(:), Q(:,:,:,:)
+real(8), intent(in) :: xf(:), yf(:), Q(:,:,:)
 real(8)::dtl1
 real(8)::dtl2
-real(8)::dtl3
-real(8)::dtlocal
 real(8)::dtmin,cf
-integer::i,j,k
+integer::i,j
 
       dtmin=1.0d90
 
-      do k=ks,ke
-     !$omp parallel do private(i,dtl1,dtl2,cf) reduction (min: dtmin)
+!$omp parallel do default(none) collapse(2) schedule(static) &
+!$omp shared(xf,yf,Q) private(dtl1,dtl2,cf) reduction(min:dtmin)
       do j=js,je
       do i=is,ie
-         cf = dsqrt( (gam*Q(IPR,i,j,k) + Q(IBX,i,j,k)**2 + Q(IBY,i,j,k)**2 + Q(IBZ,i,j,k)**2)/Q(IDN,i,j,k))
-         dtl1 =(xf(i+1)-xf(i))/(abs(Q(IVX,i,j,k)) + cf)
-         dtl2 =(yf(j+1)-yf(j))/(abs(Q(IVY,i,j,k)) + cf)
-!         dtl3 =(zf(j+1)-zf(j))/(abs(Q(IVZ,i,j,k)) + cf)
+         cf = dsqrt( (gam*Q(IPR,i,j) + Q(IBX,i,j)**2 + Q(IBY,i,j)**2 + Q(IBZ,i,j)**2)/Q(IDN,i,j))
+         dtl1 =(xf(i+1)-xf(i))/(abs(Q(IVX,i,j)) + cf)
+         dtl2 =(yf(j+1)-yf(j))/(abs(Q(IVY,i,j)) + cf)
          dtmin = min(dtl1,dtl2,dtmin)
-!         dtlocal = min(dtl1,dtl2)
-!         if(dtlocal .lt. dtmin) dtmin = dtlocal
       enddo
       enddo
-      !$omp end parallel do
-      enddo
+!$omp end parallel do
 
       TimestepControl = Ccfl* dtmin
-!      write(6,*)"dt",dt
 
 return
 end function TimestepControl
@@ -388,11 +377,11 @@ end function TimestepControl
 !     van Leer monotonicity limiter 
 !---------------------------------------------------------------------
 subroutine vanLeer(n,dvp,dvm,dv)
+use params, only : NVAR 
 implicit none
-real(8),intent(in)::dvp(:),dvm(:)
+real(8),intent(in)::dvp(NVAR),dvm(NVAR)
 integer,intent(in) :: n
-real(8),intent(out)::dv(:)
-real(8) :: sgn
+real(8),intent(out)::dv(NVAR)
 integer :: i
 
       do i=1,n
@@ -416,133 +405,89 @@ end subroutine vanLeer
 !
 !     Output: flux : the numerical flux estimated at the cell boundary
 !---------------------------------------------------------------------
-subroutine NumericalFlux( Q, F, G, H )
+subroutine NumericalFlux( dt, xf, yf, Q, F, G )
+use params, only : nxtot, nytot, NVAR, NFLX, is, ie, js, je, Ccfl, flag_flux
 implicit none
-integer::i,j,k
-real(8), intent(in) :: Q(:,:,:,:)
-real(8), intent(out) :: F(:,:,:,:)
-real(8), intent(out) :: G(:,:,:,:)
-real(8), intent(out) :: H(:,:,:,:)
-real(8),dimension(NFLX,nxtot,nytot,nztot):: Ql,Qr
+real(8), intent(in) :: dt
+real(8), intent(in) :: xf(:), yf(:)
+real(8), intent(in) :: Q(:,:,:)
+real(8), intent(out) :: F(:,:,:)
+real(8), intent(out) :: G(:,:,:)
+
+integer::i,j
+real(8),dimension(NFLX,nxtot,nytot):: Ql,Qr
 real(8),dimension(NFLX):: flx
 real(8) :: dQm(NFLX), dQp(NFLX), dQmon(NFLX)
-real(8) :: ddmon, dvmon, dpmon
+Real(8) :: ch
 
       ch = 1.0d0*Ccfl*min( xf(is+1) - xf(is), yf(js+1) - yf(js ) )/dt
 
-      ! numerical flux in the x direction
-!$omp parallel 
-      do k=ks,ke
-      !$omp do private( i, dQp, dQm, dQmon )
+!$omp parallel default(none) &
+!$omp shared(Q,F,G,Ql,Qr,xf,yf,ch) &
+!$omp private(i,j,flx,dQp,dQm,dQmon)
+
+! numerical flux in the x direction
+!$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is-1,ie+1
-         dQp(1:NVAR) = Q(1:NVAR,i+1,j,k) - Q(1:NVAR,i  ,j,k)
-         dQm(1:NVAR) = Q(1:NVAR,i  ,j,k) - Q(1:NVAR,i-1,j,k)
+         dQp(1:NVAR) = Q(1:NVAR,i+1,j) - Q(1:NVAR,i  ,j)
+         dQm(1:NVAR) = Q(1:NVAR,i  ,j) - Q(1:NVAR,i-1,j)
 
          call vanLeer(NFLX, dQp, dQm, dQmon)
 
-         ! Ql(i,j,k) --> W_(i-1/2,j,k)
-         ! Qr(i,j,k) --> W_(i-1/2,j,k)
-         Ql(1:NVAR,i+1,j,k) = Q(1:NVAR,i,j,k) + 0.5d0*dQmon(1:NVAR)
-         Qr(1:NVAR,i  ,j,k) = Q(1:NVAR,i,j,k) - 0.5d0*dQmon(1:NVAR)
+         ! Ql(i,j) --> W_(i-1/2,j)
+         ! Qr(i,j) --> W_(i-1/2,j)
+         Ql(1:NVAR,i+1,j) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
+         Qr(1:NVAR,i  ,j) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
 
       enddo
       enddo
-      !$omp end do
-      enddo
+!$omp end do
 
-      if( flag_flux == 1 ) then
-          do k=ks,ke
-         !$omp do private( i, flx )
-          do j=js,je
-          do i=is,ie+1
-            call HLL(1,Ql(:,i,j,k),Qr(:,i,j,k),flx)
-    
-!             flx(IBX) = flag_HDC*0.5d0*(Ql(IPS,i,j,k) + Qr(IPS,i,j,k) - ch*(Qr(IBX,i,j,k) - Ql(IBX,i,j,k)) )
-!             flx(IPS) = flag_HDC*0.5d0*(ch*ch*(Ql(IBX,i,j,k) + Qr(IBX,i,j,k)) - ch*(Qr(IPS,i,j,k) - Ql(IPS,i,j,k)) )
-!    
-!!             if (flx(IDN) >= 0.0) then 
-!                 flx(ISC) = flx(IDN)*Ql(ISC,i,j,k);
-!             else 
-!                 flx(ISC) = flx(IDN)*Qr(ISC,i,j,k);
-!             endif
-    
-             F(:,i,j,k)  = flx(:)
-          enddo
-          enddo
-          !$omp end do
-          enddo
-      else if ( flag_flux == 2 ) then
-          do k=ks,ke
-         !$omp do private( i, flx )
-          do j=js,je
-          do i=is,ie+1
-             call HLLD(1,Ql(:,i,j,k),Qr(:,i,j,k),flx)
-    
-!             flx(IBX) = flag_HDC*0.5d0*(Ql(IPS,i,j,k) + Qr(IPS,i,j,k) - ch*(Qr(IBX,i,j,k) - Ql(IBX,i,j,k)) )
-!             flx(IPS) = flag_HDC*0.5d0*(ch*ch*(Ql(IBX,i,j,k) + Qr(IBX,i,j,k)) - ch*(Qr(IPS,i,j,k) - Ql(IPS,i,j,k)) )
-!    
-!             if (flx(IDN) >= 0.0) then 
-!                 flx(ISC) = flx(IDN)*Ql(ISC,i,j,k);
-!             else 
-!                 flx(ISC) = flx(IDN)*Qr(ISC,i,j,k);
-!             endif
-    
-             F(:,i,j,k)  = flx(:)
-          enddo
-          enddo
-          !$omp end do
-          enddo
-      endif
+! ---- x-direction: Riemann solver ----
+!$omp do collapse(2) schedule(static)
+  do j=js,je
+    do i=is,ie+1
+      if (flag_flux == 1) then
+        call HLL (1, ch, Ql(:,i,j), Qr(:,i,j), flx)
+      else
+        call HLLD(1, ch, Ql(:,i,j), Qr(:,i,j), flx)
+      end if
+      F(:,i,j) = flx(:)
+    end do
+  end do
+!$omp end do
 
-      ! numerical flux in the y direction
-      do k=ks,ke
-      !$omp do private( i, dQp, dQm, dQmon )
-      do j=js-1,je+1
-      do i=is,ie
-         dQp(1:NVAR) = Q(1:NVAR,i,j+1,k) - Q(1:NVAR,i,j  ,k)
-         dQm(1:NVAR) = Q(1:NVAR,i,j  ,k) - Q(1:NVAR,i,j-1,k)
-
-         call vanLeer(NFLX, dQp, dQm, dQmon)
-
-         ! Ql(i,j,k) --> W_(i-1/2,j,k)
-         ! Qr(i,j,k) --> W_(i-1/2,j,k)
-         Ql(1:NVAR,i,j+1,k) = Q(1:NVAR,i,j,k) + 0.5d0*dQmon(1:NVAR)
-         Qr(1:NVAR,i,j  ,k) = Q(1:NVAR,i,j,k) - 0.5d0*dQmon(1:NVAR)
-
-      enddo
-      enddo
-      !$omp end do
-      enddo
+        ! ---- y-direction: reconstruction ----
+!$omp do collapse(2) schedule(static)
+  do j=js-1,je+1
+    do i=is,ie
+      dQp(1:NVAR) = Q(1:NVAR,i,j+1) - Q(1:NVAR,i,j  )
+      dQm(1:NVAR) = Q(1:NVAR,i,j  ) - Q(1:NVAR,i,j-1)
+      call vanLeer(NFLX, dQp, dQm, dQmon)
+      Ql(1:NVAR,i,j+1) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
+      Qr(1:NVAR,i,j  ) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
+    end do
+  end do
+!$omp end do
 
 
-      if( flag_flux == 1 ) then
-          do k=ks,ke
-         !$omp do private( i, flx )
-          do j=js,je+1
-          do i=is,ie
-              call HLL(2,Ql(:,i,j,k),Qr(:,i,j,k),flx)
-
-              G(:,i,j,k)  = flx(:)
-          enddo
-          enddo
-          !$omp end do
-          enddo
-      else if( flag_flux == 2 ) then
-          do k=ks,ke
-         !$omp do private( i, flx )
-          do j=js,je+1
-          do i=is,ie
-              call HLLD(2,Ql(:,i,j,k),Qr(:,i,j,k),flx)
-
-              G(:,i,j,k)  = flx(:)
-          enddo
-          enddo
-          !$omp end do
-          enddo
-      endif
+  ! ---- y-direction: Riemann solver ----
+!$omp do collapse(2) schedule(static)
+  do j=js,je+1
+    do i=is,ie
+      if (flag_flux == 1) then
+        call HLL (2, ch, Ql(:,i,j), Qr(:,i,j), flx)
+      else
+        call HLLD(2, ch, Ql(:,i,j), Qr(:,i,j), flx)
+      end if
+      G(:,i,j) = flx(:)
+    end do
+  end do
+!$omp end do
 
 !$omp end parallel
+
 return
 end subroutine Numericalflux
 
@@ -566,22 +511,22 @@ end subroutine Numericalflux
 !     Output: flx  : flux estimated at the initial discontinuity
 !            index: (IDN, IVX, IVY, IVZ, IPR, IBperp1, IBperp2)
 !---------------------------------------------------------------------
-subroutine HLL(idir,Ql,Qr,flx)
+subroutine HLL(idir,ch,Ql,Qr,flx)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, NFLX, is, ie, js, je, gam, flag_HDC
 implicit none
 integer, intent(in) :: idir
-real(8),intent(in)  ::Ql(:), Qr(:)
-real(8),intent(out) :: flx(:)
+real(8),intent(in)  :: ch
+real(8),intent(in)  :: Ql(NVAR), Qr(NVAR)
+real(8),intent(out) :: flx(NFLX)
 integer :: IVpara, IVperp1, IVperp2
 integer :: IBpara, IBperp1, IBperp2
 real(8):: b1
 real(8):: Ul(NFLX), Ur(NFLX)
 real(8):: Fl(NFLX), Fr(NFLX)
-real(8):: Ust(NFLX)
-real(8):: Fst(NFLX)
 real(8):: cfl,cfr
 real(8):: sl, sr
 real(8):: pbl, pbr, ptotl, ptotr
-integer :: i, n
 
       if( idir == 1 ) then
            IVpara  = IVX
@@ -599,6 +544,7 @@ integer :: i, n
            IBperp2 = IBX
       endif
           
+          b1 = 0.5d0*( Ql(IBpara) + Qr(IBpara) )
           pbl = 0.5d0*(b1**2 + Ql(IBperp1)**2 + Ql(IBperp2)**2)
           pbr = 0.5d0*(b1**2 + Qr(IBperp1)**2 + Qr(IBperp2)**2)
           ptotl = Ql(IPR) + pbl
@@ -688,11 +634,14 @@ end subroutine HLL
 !     Output: flx  : flux estimated at the initial discontinuity
 !            index: (IDN, IVX, IVY, IVZ, IPR, IBperp1, IBperp2)
 !---------------------------------------------------------------------
-subroutine HLLD(idir,Ql,Qr,flx)
+subroutine HLLD(idir,ch,Ql,Qr,flx)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, NFLX, is, ie, js, je, gam, flag_HDC
 implicit none
 integer, intent(in) :: idir
-real(8),intent(in)  ::Ql(:), Qr(:)
-real(8),intent(out) :: flx(:)
+real(8),intent(in)  :: ch
+real(8),intent(in)  :: Ql(NVAR), Qr(NVAR)
+real(8),intent(out) :: flx(NFLX)
 integer :: IVpara, IVperp1, IVperp2
 integer :: IBpara, IBperp1, IBperp2
 real(8):: b1
@@ -700,14 +649,20 @@ real(8):: Ul(NFLX), Ur(NFLX)
 real(8):: Ulst(NFLX), Urst(NFLX)
 real(8):: Uldst(NFLX), Urdst(NFLX)
 real(8):: Fl(NFLX), Fr(NFLX)
-real(8):: test(NFLX)
 real(8):: cfl,cfr
 real(8):: S0, S1, S2, S3, S4
 real(8):: pbl, pbr, ptotl, ptotr
 real(8) :: sqrtdl, sqrtdr, v_dot_B_stl, v_dot_B_str
 real(8) :: Ulst_d_inv, Urst_d_inv, sum_sqrtd_inv, tmp
 real(8) :: ptot_stl, ptot_str,ptot_st, Cl, Cr, Cml, Cmr, Cml_inv, Cmr_inv, bxsgn
-integer :: i, n
+      Fl = 0.0d0
+      Fr = 0.0d0
+      Ul = 0.0d0
+      Ur = 0.0d0
+      Ulst = 0.0d0
+      Urst = 0.0d0
+      Uldst = 0.0d0
+      Urdst = 0.0d0
 
       if( idir == 1 ) then
            IVpara  = IVX
@@ -900,10 +855,6 @@ integer :: i, n
              Urdst(IEN) = Urst(IEN) + sqrtdr*bxsgn*(v_dot_B_str - tmp)
          endif
 
-!         test = (S4 - S3)*Urst + (S3 - S2)*Urdst + (S2 - S1)*Uldst + (S1 - S0)*Ulst - S4*Ur + S0*Ul + Fr - Fl
-!         print*,test(IVperp2)
-         
-
     !--- Step 6.  Compute flux
           if( S0 >= 0.0d0 ) then
                flx(:) = Fl(:)
@@ -920,54 +871,74 @@ integer :: i, n
            endif
            flx(IBpara) = 0.0d0
 
-             flx(IBpara) = flag_HDC*0.5d0*(Ql(IPS) + Qr(IPS) - ch*(Qr(IBpara) - Ql(IBpara)) )
-             flx(IPS) = flag_HDC*0.5d0*(ch*ch*(Ql(IBpara) + Qr(IBpara)) - ch*(Qr(IPS) - Ql(IPS)) )
+           flx(IBpara) = flag_HDC*0.5d0*(Ql(IPS) + Qr(IPS) - ch*(Qr(IBpara) - Ql(IBpara)) )
+           flx(IPS) = flag_HDC*0.5d0*(ch*ch*(Ql(IBpara) + Qr(IBpara)) - ch*(Qr(IPS) - Ql(IPS)) )
     
+
 return
 end subroutine HLLD
 !-------------------------------------------------------------------
 !       Update consevative variables U using numerical flux F
 !-------------------------------------------------------------------
-subroutine UpdateConsv( dt1, xf, yf, zf, F, G, H, Q, Uo, U)
+subroutine UpdateConsv( dt1, xf, yf, F, G, Q, Uo, U)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam
+implicit none
 real(8), intent(in) :: dt1
-real(8), intent(in)  :: xf(:), yf(:), zf(:)
-real(8), intent(in)  :: F(:,:,:,:), G(:,:,:,:), H(:,:,:,:)
-real(8), intent(in)  :: Uo(:,:,:,:), Q(:,:,:,:)
-real(8), intent(out) :: U(:,:,:,:)
-real(8) :: divB , src
-integer::i,n,j,k
+real(8), intent(in) :: xf(:), yf(:)
+real(8), intent(in) :: F(:,:,:), G(:,:,:)
+real(8), intent(in) :: Q(:,:,:)
+real(8), intent(in) :: Uo(:,:,:)
+real(8), intent(inout) :: U(:,:,:)
+integer::i,j
 
-!$omp parallel 
-      do k=ks,ke
-      !$omp do private( i,j )
+!$omp parallel default(none) &
+!$omp shared(U,Uo,F,G,xf,yf) &
+!$omp shared(dt1,dt0) &
+!$omp private(i,j)
+
+!$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is,ie
-         U(:,i,j,k) = Uo(:,i,j,k) + dt1*(- F(:,i+1,j,k) + F(:,i,j,k))/(xf(i+1)-xf(i)) &
-                                  + dt1*(- G(:,i,j+1,k) + G(:,i,j,k))/(yf(j+1)-yf(j)) 
+         U(:,i,j) = Uo(:,i,j) + dt1*(- F(:,i+1,j) + F(:,i,j))/(xf(i+1)-xf(i)) &
+                              + dt1*(- G(:,i,j+1) + G(:,i,j))/(yf(j+1)-yf(j))
       enddo
       enddo
-      !$omp end do
-      enddo
-
-      ! Source term
-      do k=ks,ke
-      !$omp do private( i, src )
-      do j=js,je
-      do i=is,ie
-         src = dt1*Q(IDN,i,j,k)*grav_accy
-         U(IMY,i,j,k) = U(IMY,i,j,k) + src
-         U(IEN,i,j,k) = U(IEN,i,j,k) + src*Q(IVY,i,j,k)
-
-         U(IPS,i,j,k) = U(IPS,i,j,k)*dexp(-alpha*Ccfl*dt1/dt)
-      enddo
-      enddo
-      !$omp end do
-      enddo
+!$omp end do
 
 !$omp end parallel
 
 return
 end subroutine UpdateConsv
+!-------------------------------------------------------------------
+!       Update consevative variables U using numerical flux F
+!-------------------------------------------------------------------
+subroutine SrcTerms( dt1, dt0, Q, U )
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, alpha, Ccfl, grav_accy
+implicit none
+real(8), intent(in) :: dt1, dt0
+real(8), intent(in)  :: Q(:,:,:)
+real(8), intent(inout) :: U(:,:,:)
+integer :: i,j
+real(8) :: src
+
+      ! Source term
+!$omp parallel 
+      !$omp do private( i, j, src )
+      do j=js,je
+      do i=is,ie
+         src = dt1*Q(IDN,i,j)*grav_accy
+         U(IMY,i,j) = U(IMY,i,j) + src
+         U(IEN,i,j) = U(IEN,i,j) + src*Q(IVY,i,j)
+
+         U(IPS,i,j) = U(IPS,i,j)*dexp(-alpha*Ccfl*dt1/dt0)
+      enddo
+      enddo
+      !$omp end do
+!$omp end parallel
+
+end subroutine SrcTerms
 !-------------------------------------------------------------------
 !       Output snapshot files 
 !       Input  : flag, dirname, xf, xv, Q
@@ -975,21 +946,26 @@ end subroutine UpdateConsv
 !       flag = .true.  --> output snapshot when calling this subroutine
 !       flag = .false. --> output snapshot every dtsnap
 !-------------------------------------------------------------------
-subroutine Output( flag, flag_binary, dirname, xf, xv, yf, yv, Q )
-logical, intent(in) :: flag ! false --> output per dtsnap, true --> force to output
-logical, intent(in) :: flag_binary ! false --> ascii, true --> binary
-character(20), intent(in) :: dirname 
-real(8), intent(in) :: xf(:), xv(:), yf(:), yv(:), Q(:,:,:,:)
-integer::i,j,k
+subroutine Output( time, flag, xv, yv, Q )
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, IPS, NVAR, & 
+                   nx, ny, is, ie, js, je, gam, &
+                   flag_binary, dirname, dtsnap, unitsnap
+implicit none
+real(8), intent(in) :: time! false --> output per dtsnap, true --> force to output
+logical, intent(in) :: flag
+real(8), intent(in) :: xv(:), yv(:), Q(:,:,:)
+
+integer::i,j
 character(100)::filename
 real(8), save :: tsnap = - dtsnap
-integer, save :: nsnap
+integer, save :: nsnap = 0
+
 
     if( .not.flag) then
         if( time + 1.0d-14.lt. tsnap+dtsnap) return
     endif
 
-        write(filename,'(i5.5)') nsnap
+    write(filename,'(i5.5)') nsnap
     if( flag_binary ) then
         filename = trim(dirname)//"/snap"//trim(filename)//".bin"
         open(unitsnap,file=filename,form='unformatted',access="stream",action="write")
@@ -1000,20 +976,19 @@ integer, save :: nsnap
         write(unitsnap) NVAR - 5
         write(unitsnap) xv(is:ie)
         write(unitsnap) yv(js:je)
-        write(unitsnap) real(Q(1:5,is:ie,js:je,ks:ke)) ! single precision
-        write(unitsnap) real(Q(6:NVAR,is:ie,js:je,ks:ke)) ! single precision
+        write(unitsnap) real(Q(1:5,is:ie,js:je)) ! single precision
+        write(unitsnap) real(Q(6:NVAR,is:ie,js:je)) ! single precision
         close(unitsnap)
     else 
         filename = trim(dirname)//"/snap"//trim(filename)//".dat"
         open(unitsnap,file=filename,form='formatted',action="write")
         write(unitsnap,*) "# time = ",time
         write(unitsnap,*) "#nx, ny = ", nx, ny
-          do k=ks,ke
           do j=js,je
           do i=is,ie
-              write(unitsnap,*) xv(i), yv(j), Q(IDN,i,j,k), Q(IVX,i,j,k), Q(IVY,i,j,k), Q(IVZ,i,j,k), &
-                                Q(IPR,i,j,k), Q(IBX,i,j,k), Q(IBY,i,j,k), Q(IBZ,i,j,k), Q(IPS,i,j,k) 
-          enddo
+              write(unitsnap,*) xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), &
+                                Q(IPR,i,j), Q(IBX,i,j), Q(IBY,i,j), Q(IBZ,i,j) , Q(IPS,i,j)
+
           enddo
           enddo
           close(unitsnap)
@@ -1026,17 +1001,29 @@ integer, save :: nsnap
 
 return
 end subroutine Output
-!-------------------------------------------------------------------
-!       create directory
-!       Input  : the directory to be created
-!-------------------------------------------------------------------
+!
+!!-------------------------------------------------------------------
+!!       create directory
+!!       Input  : the directory to be created
+!!-------------------------------------------------------------------
 subroutine makedirs(outdir)
 implicit none
+integer :: istat
 character(len=*), intent(in) :: outdir
-character(len=256) command
-write(command, *) 'if [ ! -d ', trim(outdir), ' ]; then mkdir -p ', trim(outdir), '; fi'
-!      write(*, *) trim(command)
-call system(command)
+character(len=1024) :: cmd = ""
+
+    if (len_trim(outdir) == 0) then 
+       write(*,*) "makedirs: outdir is empty" 
+       stop 1 
+    end if
+
+    cmd = "mkdir -p '" // trim(outdir) // "'"
+    istat = system(trim(cmd))
+    if( istat .ne. 0 ) then
+        print*, "makedirs: command failed, status=", istat
+        print*, "cmd: ", trim(cmd)
+    endif
+
 end subroutine makedirs
 !-------------------------------------------------------------------
 !       Realtime Analysis
@@ -1044,28 +1031,22 @@ end subroutine makedirs
 !       Output : phys_evo(nevo)
 !-------------------------------------------------------------------
 subroutine RealtimeAnalysis(xv,yv,Q,phys_evo)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, nevo
 implicit none
-real(8), intent(in) :: xv(:), yv(:), Q(:,:,:,:)
+real(8), intent(in)  :: xv(:), yv(:), Q(:,:,:)
 real(8), intent(out) :: phys_evo(:)
-integer::i,j,k
-real(8) :: dvx, er_divB 
+integer::i,j
+real(8) :: tmp
 
-      dvx = 0.0d0
-      er_divB = 0.0d0
-      do k=ks,ke
+      
+      tmp = 0.0d0
       do j=js,je
       do i=is,ie
-           dvx = dvx + Q(IVX,i,j,k)**2
-           er_divB = er_divB + ( Q(IBX,i+1,j,k) - Q(IBX,i-1,j,k) &
-                               + Q(IBY,i,j+1,k) - Q(IBY,i,j-1,k) )**2 &
-                       /( Q(IBX,i,j,k)**2 + Q(IBY,i,j,k)**2 )
+          tmp = tmp + Q(IDN,i,j)*Q(IPR,i,j)/(xv(i)+yv(j))
       enddo
       enddo
-      enddo
-      phys_evo(1) = sqrt(dvx/dble(nx*ny))
-      phys_evo(2) = sqrt(er_divB/dble(nx*ny))
+      phys_evo(1:nevo) = 0.0d0
       
 return
 end subroutine
-
-end program main
