@@ -440,20 +440,20 @@ subroutine Output(flag_force,flag_binary,dirname)
      write(filename,'(a3,i5.5,a4)')"unf",nout,".dat"
      filename = trim(dirname)//filename
      
-     x1out(is:ie,1) = x1b(is:ie)
-     x1out(is:ie,2) = x1a(is:ie)
+     x1out(is-gs:ie+gs,1) = x1b(is-gs:ie+gs)
+     x1out(is-gs:ie+gs,2) = x1a(is-gs:ie+gs)
 
      thout(1:mang,1) = dth(1:mang)
      thout(1:mang,2) = mux(1:mang)
      thout(1:mang,3) = muy(1:mang)
      
-     radout(1:mang,is:ie,js:je,ks) = fdis(1:mang,is:ie,js:je,ks)
+     radout(1:mang,is-gs:ie+gs,js:je,ks) = fdis(1:mang,is-gs:ie+gs,js:je,ks)
      
      write(filename,'(a4,i5.5,a4)')"snap",nout,".bin"
      filename = trim(dirname)//filename
-     open(newunit=unitbin,file=filename,status='replace',form='binary') 
+     open(newunit=unitbin,file=filename,status='replace',form='unformatted',access="stream",action="write")
      write(unitbin) time
-     write(unitbin) izones
+     write(unitbin) izones+2*gs
      write(unitbin) mang
      write(unitbin) x1out(:,:)
      write(unitbin) thout(:,:)
@@ -483,13 +483,13 @@ subroutine Output(flag_force,flag_binary,dirname)
      write(filename,'(a4,i5.5,a4)')"snap",nout,".dat"
      filename = trim(dirname)//filename
      open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write") 
-     write(unitasc,"(a1,(1x,(A)),(1x,1PE15.4))") "#","time=",time
-     write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","nx=", izones+2*gs
-     write(unitasc,"(a1,(A))") "#"," x E Fx"
+     write(unitasc,"((a1,1x),((A),1x),(1PE15.4,1x))") "#","time=", time
+     write(unitasc,"((a1,1x),((A),1x),(i0,1x))")      "#","nx=  ", izones+2*gs
+     write(unitasc,"(A)") "x E Fx" ! do not use number here
      k=ks
      j=js
      do i=is-gs,ie+gs
-        write(unitasc,"(1x,5(1x,E15.6e3))") x1b(i),Erad(i,j,k),Frad(xdir,i,j,k)
+        write(unitasc,"(5(E15.6e3,1x))") x1b(i),Erad(i,j,k),Frad(xdir,i,j,k)
      enddo
      close(unitasc)
          

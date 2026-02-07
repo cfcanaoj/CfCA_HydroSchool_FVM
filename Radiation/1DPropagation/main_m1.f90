@@ -635,8 +635,8 @@ end subroutine UpdateRadAdvection
          filename = trim(dirname)//filename
          open(newunit=unitbin,file=filename,status='replace',form='unformatted',access="stream",action="write") 
          write(unitbin) time
-         write(unitbin) izones,gs
-         write(unitbin) 4
+         write(unitbin) izones+2*gs
+         write(unitbin) 2
          write(unitbin) x1out(:,:)
          write(unitbin) radout(:,:,:,:)
          close(unitbin)
@@ -645,13 +645,13 @@ end subroutine UpdateRadAdvection
          write(filename,'(a4,i5.5,a4)')"snap",nout,".dat"
          filename = trim(dirname)//filename
          open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write") 
-         write(unitasc,"(a1,(1x,(A)),(1x,1PE15.4))") "#","time=",time
-         write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","nx=", izones+2*gs
-         write(unitasc,"(a1,(A))") "#"," x E Fx"
+         write(unitasc,"((a1,1x),((A),1x),(1PE15.4,1x))") "#","time=", time
+         write(unitasc,"((a1,1x),((A),1x),(i0,1x))")      "#","  nx=", izones+2*gs
+         write(unitasc,"(A)") "x E Fx " ! do not use number here
          k=ks
          j=js
          do i=is-gs,ie+gs
-            write(unitasc,*) x1b(i),Erad(i,j,k),Frad(xdir,i,j,k)
+            write(unitasc,"(5(E15.6e3,1x))") x1b(i),Erad(i,j,k),Frad(xdir,i,j,k)
          enddo
          close(unitasc)
       endif
