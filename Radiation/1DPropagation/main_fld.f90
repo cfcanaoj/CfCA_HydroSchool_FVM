@@ -161,7 +161,7 @@ program main
   mloop: do ntime=1,ntimemax
      if(sts_on) then
         call TimestepControl(dt_exp)
-        if(mod(ntime,100) .eq. 0 ) write(6,*)ntime,time,dt,Erad(is,js,ks)
+        if(mod(ntime,100) .eq. 0 ) write(6,*)ntime,time,dt
         call MakeSTS(dt_exp, Msts, nusts, dt_sub, dt_eff)
         do nsts=1,Msts
            dt = dt_sub(nsts)
@@ -176,7 +176,7 @@ program main
         if(time > timemax) exit mloop
      else
         call TimestepControl(dt)
-        if(mod(ntime,100) .eq. 0 ) write(6,*)ntime,time,dt,Erad(is,js,ks)
+        if(mod(ntime,100) .eq. 0 ) write(6,*)ntime,time,dt
         call RadBoundaryCondition
         call StateRad
         call RadFlux1
@@ -260,8 +260,6 @@ subroutine RadBoundaryCondition
   do j=js,je
   do i=1,mgn
      Erad(    is-i,j,k) = erad1
-     Frad(1,  is-i,j,k) = Erad(    is-i,j,k)/sqrt(3.0d0)
-     Frad(2:3,  is-i,j,k) = 0.0d0
   enddo
   enddo
   enddo
@@ -269,8 +267,7 @@ subroutine RadBoundaryCondition
   do k=ks,ke
   do j=js,je
   do i=1,mgn
-     Erad(    ie+i,j,k) = Erad(ie,j,k) 
-     Frad(:,  ie+i,j,k) = Frad(:,ie,j,k)
+     Erad(    ie+i,j,k) = Erad(ie,j,k)
   enddo
   enddo
   enddo
@@ -406,7 +403,7 @@ subroutine UpdateRadAdvection
      & +(- radnflux1(merd,i+1,j,k)                    &
      &   + radnflux1(merd,i  ,j,k))/(x1a(i+1)-x1a(i)) &
      &      )
-
+         ! for output
          Frad(1,i,j,k) = 0.5d0*(radnflux1(merd,i+1,j,k)+radnflux1(merd,i,j,k))
          Frad(2:3,i,j,k) = 0.0
   enddo
@@ -467,18 +464,18 @@ subroutine Output(flag_force,flag_binary,dirname)
   else
      write(filename,'(a4,i5.5,a4)')"snap",nout,".dat"
      filename = trim(dirname)//filename
-     open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write") 
-     write(unitasc,"(a1,(1x,(A)),(1x,1PE15.4))") "#","time=",time
-     write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","nx=", izones+2*gs
-     write(unitasc,"(a1,(A))") "#"," x E Fx"
+     open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write")
+     write(unitasc,"((a1,1x),(A,1x),(1PE15.4,1x))") "#","time=", time
+     write(unitasc,"((a1,1x),(A,1x),(i0,1x))")      "#","nx=  ", izones+2*gs
+     write(unitasc,"(A)") "x E Fx " ! do not use number here
      k=ks
      j=js
      do i=is-gs,ie+gs
-        write(unitasc,*) x1b(i),Erad(i,j,k),Frad(xdir,i,j,k)
+        write(unitasc,"(5(E15.6e3,1x))") x1b(i),Erad(i,j,k),Frad(xdir,i,j,k)
      enddo
      close(unitasc)
   endif
-  write(6,*) "output:",nout,ntime,time,Erad(is,js,ks)/1e20
+  write(6,*) "output:",nout,ntime,time
 
   nout=nout+1
   tout=time
