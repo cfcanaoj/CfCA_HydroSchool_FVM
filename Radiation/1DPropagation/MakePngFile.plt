@@ -15,10 +15,14 @@ set xrange [0:1]
 
 # set dir name
 model="m1"
+
+if (exists("dir")) model=dir
+
 print "Plot data in ".model
 
 inpfile=model.sprintf("/snap%05d.dat",num)
-outfile=model.sprintf("/snap%05d.png",num)
+# below we plot E
+outfile=model.sprintf("/E%05d.png",num)
 
 # extract time from the first line
 command=sprintf("awk 'NR==1{print($3)}' %s", inpfile)
@@ -26,7 +30,8 @@ time=system(command)
 set output outfile
 print "The plot is saved as ".outfile
 set title sprintf("time = %s",time) 
-plot inpfile u 1:2 ti model w l lw 6
+
+plot inpfile u "x":"E" ti model w l lw 6
 
 
 set terminal pop
