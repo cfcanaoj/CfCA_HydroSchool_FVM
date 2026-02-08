@@ -42,9 +42,9 @@ gnuplot -e num=10 MakePngFile.plt
 ./MakeAnim.plt m1 1 90
 ```
 
-## 可視化 (Python)
+## 可視化 (python matplotlib)
 ### 画像作成
-図をpdf形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` 相当）です。
+図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` 相当）です。
 ```bash
 python -e num=10 MakePlot.py m1 10
 ```
