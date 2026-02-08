@@ -26,24 +26,29 @@ SN の場合は`m1`を`sn`に、FLD の場合は`m1`を`fld`に読み替えて�
 バイナリで出力したい時は`main_m1.f90`の`flag_binary`を`.true.`にしてください。
 
 ## 可視化 (gnuplot)
+### リアルタイム解析
 簡単にリアルタイム解析をしたいときは`RealTimeAnim.plt`を実行します。
 ```bash
 gnuplot RealTimeAnim.plt
 ```
+### 画像作成
 図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` 相当）です。
 ```bash
 gnuplot -e num=10 MakePngFile.plt
-```	 
+```
+### アニメーション	 
 このpngをAnimationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了
 ```bash
 ./MakeAnim.plt m1 1 90
 ```
 
 ## 可視化 (Python)
-図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` 相当）です。
+### 画像作成
+図をpdf形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` 相当）です。
 ```bash
 python -e num=10 MakePlot.py m1 10
-```	 
+```
+### アニメーション	 
 Animationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了
 ```bash
 ./MakeAnim.py m1 1 90
