@@ -24,10 +24,10 @@ end module constants
 
 module modelpara
   implicit none
-  real(8),parameter:: rho0=1.0d0! [g/cm^3]
-  real(8),parameter:: kap0=0.1d0! [cm^2/g]
-  real(8),parameter:: erad0=1.0d10! [erg/cm^3]
-  real(8),parameter:: erad1=1.0d20! [erg/cm^3]
+  real(8),parameter::  rho0 = 1.0d0! [g/cm^3]
+  real(8),parameter::  kap0 = 0.01d0! [cm^2/g]
+  real(8),parameter:: erad0 = 1.0d10! [erg/cm^3]
+  real(8),parameter:: erad1 = 1.0d20! [erg/cm^3]
 end module modelpara
 
 module weno5
