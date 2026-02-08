@@ -41,7 +41,6 @@ all: ${exem1} ${exesn} ${exefld}
 #################
 
 ${exem1}: main_m1.f90
-	mkdir -p m1mod
 	${fc} ${fopt} $< -o $@
 	rm *.mod
 
