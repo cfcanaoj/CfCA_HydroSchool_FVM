@@ -36,9 +36,9 @@ with open(foutname, 'r') as data_file:
 data = np.genfromtxt(foutname,skip_header=2)
 x, E, Fx = np.split(data,3,1)
 
-# グラフを作成する。
-ax[0].plot(x, E, 'o-',c="r",label="numerical")
-ax[1].plot(x, Fx, 'o-',c="r",label="numerical")
+# 複数のプロットからなるグラフを作成する。
+ax[0].plot(x, E, 'o-',c="r")
+ax[1].plot(x, Fx,'o-',c="r")
 
 ax[0].text(0,1.10,r"$\mathrm{time} = %.2f$"%(time),horizontalalignment="center")
 
@@ -48,8 +48,10 @@ if icount == 0:
 
 icount +=1
 
-#plt.savefig(dirname + '/snap%05d.png'%(step),bbox_inches="tight", pat_inches=0.0,dpi=1000)
-plt.savefig(dirname + '/snap%05d.pdf'%(step),bbox_inches="tight")
+filename=dirname + '/snap%05d.png'%(step)
+print("file is saved as ",filename)
+plt.savefig(filename,bbox_inches="tight",dpi=150)
+#plt.savefig(filename,bbox_inches="tight")
 
 #plt.show()
 #plt.close()
