@@ -1,4 +1,4 @@
-# Radiation / 1DPropagation
+# Radiation / 1D_Propagation
 
 このディレクトリには、輻射輸送の **1D 伝播（Propagation）** のサンプル計算を走らせ、出力を可視化するための一式が入っています。  
 **S\_N 法（SN） / M1-closure（M1） / Flux-Limited Diffusion（FLD）** の 3 手法を同一設定で比較できます。
@@ -29,27 +29,27 @@ SN の場合は`m1`を`sn`に、FLD の場合は`m1`を`fld`に読み替えて�
 ### リアルタイム解析
 簡単にリアルタイム解析をしたいときは`RealTimeAnim.plt`を実行します。
 ```bash
-gnuplot RealTimeAnim.plt
+gnuplot -c RealTimeAnim.plt m1
 ```
 ### 画像作成
-図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` 相当）です。
+図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` のスナップショットを書きたい場合は10）です。`m1/E?????.png`として保存されます。
 ```bash
-gnuplot -e num=10 MakePngFile.plt
+gnuplot -c MakePngFile.plt m1 num
 ```
 ### アニメーション	 
-このpngをAnimationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了
+このpngをAnimationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了（以下の例では1 90）。`m1/animation.mp4`として保存されます。
 ```bash
-./MakeAnim.plt m1 1 90
+./MakeAnim.sh m1 1 90
 ```
 
 ## 可視化 (python matplotlib)
 ### 画像作成
-図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` 相当）です。
+図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` 相当）です。`m1/E?????.png`として保存されます。
 ```bash
-python -e num=10 MakePlot.py m1 10
+python MakePlot.py m1 10
 ```
 ### アニメーション	 
-Animationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了
+Animationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了（以下の例では1 90）。`m1/animation.mp4`として保存されます。
 ```bash
 ./MakeAnim.py m1 1 90
 ```
