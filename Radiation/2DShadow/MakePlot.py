@@ -65,14 +65,13 @@ def ReadSnapshot(filename,modelname) -> FluidSnapshot:
         parts = line.split()
         ny = int(parts[2])
         print("nx,ny",nx,ny)
-        data = np.genfromtxt(filename,comments="#",names=True)
-        x, y, E, Fx, Fy = np.split(data,5,1)
+        data = np.genfromtxt(filename,comments="#",dtype=float,names=("x","y","E","Fx","Fy"))
+        x  = data["x"].reshape(ny,nx)
+        y  = data["y"].reshape(ny,nx)
+        E  = data["E"].reshape(ny,nx)
+        Fx = data["Fx"].reshape(ny,nx)
+        Fy = data["Fy"].reshape(ny,nx)
         
-        x  =  x.reshape(nx,ny)
-        y  =  y.reshape(nx,ny)
-        E  =  E.reshape(nx,ny)
-        Fx = Fx.reshape(nx,ny)
-        Fy = Fy.reshape(nx,ny)
         
     return FluidSnapshot(
         modelname = modelname,
@@ -92,18 +91,33 @@ def makedirs(path):
 
 filename = dirname + "/snap%05d.dat"%(step)
 snap = ReadSnapshot(filename,dirname)
-        
-fig = plt.figure(figsize=(10,3),dpi=150) 
-ax  = plt.subplot(111)
+
+fig, ax = plt.subplots(figsize=(10, 3.5), dpi=150)
+plt.subplots_adjust(top=0.85)
 ax.set_xlabel(r"$x$")
 ax.set_ylabel(r"$y$")
 
-ax.pcolormesh(snap.x, snap.y, snap.E)
+ax.set_aspect(1)
+im = ax.pcolormesh(snap.x, snap.y, snap.E,shading="auto",cmap="inferno",vmin=0.0,vmax=0.07)
 
-ax.text(0.9,1.04,r"$ct = %.2f$"%(snapshots[0].time*timenorm),horizontalalignment="center",fontsize=plt.rcParams["axes.labelsize"])
-ax.legend(frameon=False)
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("top", size="4%", pad=0.1)
+
+cbar = fig.colorbar(im, cax=cax, orientation="horizontal")
+cbar.ax.xaxis.set_ticks_position("top")
+cbar.ax.xaxis.set_label_position("top")
+#cbar = fig.colorbar(im, orientation="horizontal")
+#cbar = fig.colorbar(im, ax=ax,orientation="horizontal",pad=0.08)
+#cbar.ax.xaxis.set_ticks_position("top")
+#cbar.ax.xaxis.set_label_position("top")
+
+#plt.colorbar(im,orientation="horizontal")
+timenorm=3.0e10
+ax.text(0.0,1.25,r"$ct = %.2f$"%(snap.time*timenorm),transform=ax.transAxes,horizontalalignment="center",fontsize=plt.rcParams["axes.labelsize"])
+
+#ax.legend(frameon=False)
 
 filename=dirname + '/E%05d.png'%(step)
 print("file is saved as ",filename)
-plt.tight_layout()
 plt.savefig(filename)
