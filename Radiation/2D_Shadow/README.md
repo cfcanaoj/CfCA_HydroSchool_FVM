@@ -1,4 +1,4 @@
-# Radiation / 2DShadow
+# Radiation / 2D Shadow
 
 このディレクトリには、輻射輸送の **2D シャドウテスト （Shadow test）** のサンプル計算を走らせ、出力を可視化するための一式が入っています。  
 **S\_N 法（SN） / M1-closure（M1） / Flux-Limited Diffusion（FLD）** の 3 手法を同一設定で比較できます。
