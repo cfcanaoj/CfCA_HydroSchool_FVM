@@ -18,7 +18,7 @@ fi
 
 for n in $(seq "$nmin" "$nmax"); do
   # dir は gnuplot に「文字列」として渡す（シングルクォートで囲む）
-  gnuplot -c  MakePngFile.plt " ${dir} ${n}"
+  gnuplot -c  MakePngFile.plt "${dir}" "${n}"
 done
 
 fstfile=$(ls -1 "${dir}/${prename}"*.png 2>/dev/null | head -1 || true)
