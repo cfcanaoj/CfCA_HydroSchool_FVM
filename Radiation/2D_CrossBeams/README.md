@@ -1,7 +1,7 @@
 # Radiation / 2D CrossBeams
 
 このディレクトリには、輻射輸送の **二次元ビーム交差 （2D cross beams test）** のサンプル計算を走らせ、出力を可視化するための一式が入っています。  
-**S\_N 法（SN） / M1-closure（M1） / Flux-Limited Diffusion（FLD）** の 3 手法を同一設定で比較できます。
+**S\_N 法（SN） / M1-closure（M1） ** の 2手法を同一設定で比較できます。
 
 
 ## コンパイル
@@ -9,7 +9,7 @@
 ```bash
 make
 ```
-生成される実行ファイルは`m1.x`（M1）,`sn.x`（SN）,`fld.x`（FLD）です。
+生成される実行ファイルは`m1.x`（M1）,`sn.x`（SN）です。
 以下のコマンド実行ファイル等を消せます。
 ```bash
 make clean
@@ -18,7 +18,7 @@ make clean
 
 ## 実行
 以下では M1（`m1.x`） を例に説明します。
-SN の場合は`m1`を`sn`に、FLD の場合は`m1`を`fld`に読み替えてください。
+SN の場合は`m1`を`sn`に読み替えてください。
 ```bash
 	./m1.x
 ```
