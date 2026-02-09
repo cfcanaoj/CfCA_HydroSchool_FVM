@@ -5,10 +5,10 @@ end module units
 
 module modelpara
   implicit none
-  real(8),parameter:: rho0=0.25d0! [g/cm^3]
-  real(8),parameter:: kap0=0.04d0! [cm^2/g]
-  real(8),parameter:: erad0=1.0d10! [erg/cm^3]
-  real(8),parameter:: erad1=1.0d20! [erg/cm^3]
+  real(8),parameter::  rho0 = 1.0d0! [g/cm^3]
+  real(8),parameter::  kap0 = 1.0d0! [cm^2/g]
+  real(8),parameter:: erad0 = 1.0d10! [erg/cm^3]
+  real(8),parameter:: erad1 = 1.0d20! [erg/cm^3]
 end module modelpara
 
 module commons
@@ -80,6 +80,7 @@ module fluxmod
        &            , mfru=mufru,mfrv=mufrv,mfrw=mufrw
   real(8),dimension(mradflx,in,jn,kn):: radnflux1,radnflux2,radnflux3
   logical,parameter::flagEdd=.false.
+  real(8),parameter::fluxfactormax=0.999d0
 
 end module fluxmod
 module closure
@@ -221,6 +222,7 @@ end subroutine GenerateProblem
       subroutine RadBoundaryCondition
         use commons
         use modelpara
+        use fluxmod
       implicit none
       integer::i,j,k
 
@@ -231,7 +233,7 @@ end subroutine GenerateProblem
           if(d(is-i,j,k) .gt. 1.0d0) then
              Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)/sqrt(3.0d0)
           else
-             Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)*0.99
+             Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)*fluxfactormax
           endif
           Frad(ydir:zdir,  is-i,j,k) = 0.0d0
  
@@ -533,7 +535,7 @@ subroutine UpdateRadSource
      Erad(i,j,k) =  max(Erad(i,j,k),Elte(i,j,k))
 
      fnl = sqrt(Frad(xdir,i,j,k)**2 +Frad(ydir,i,j,k)**2 +Frad(zdir,i,j,k)**2)
-     flm =  0.99*Erad(i,j,k)
+     flm =  fluxfactormax*Erad(i,j,k)
      if(fnl .gt. flm )then
         Frad(xdir,i,j,k) =  Frad(xdir,i,j,k)*flm/fnl
         Frad(ydir,i,j,k) =  Frad(ydir,i,j,k)*flm/fnl
@@ -584,7 +586,7 @@ subroutine UpdateRadAdvection
          Erad(i,j,k) =  max(Erad(i,j,k),Elte(i,j,k))
 
          fnl = sqrt(Frad(xdir,i,j,k)**2 +Frad(ydir,i,j,k)**2 +Frad(zdir,i,j,k)**2) ! dimensional
-         flm =  0.99*Erad(i,j,k)
+         flm =  fluxfactormax*Erad(i,j,k)
          if(fnl .gt. flm )then
             Frad(xdir,i,j,k) =  Frad(xdir,i,j,k)*flm/fnl
             Frad(ydir,i,j,k) =  Frad(ydir,i,j,k)*flm/fnl
@@ -647,7 +649,7 @@ end subroutine UpdateRadAdvection
          open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write") 
          write(unitasc,"((a1,1x),((A),1x),(1PE15.4,1x))") "#","time=", time
          write(unitasc,"((a1,1x),((A),1x),(i0,1x))")      "#","  nx=", izones+2*gs
-         write(unitasc,"(A)") "x E Fx " ! do not use number here
+         write(unitasc,"(A)") "# x E Fx "
          k=ks
          j=js
          do i=is-gs,ie+gs

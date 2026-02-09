@@ -18,16 +18,15 @@
 module constants
   implicit none
   real(8), parameter :: pi = acos(-1.d0)
-  real(8), parameter :: cl = 3.d10  ! cm/s (use any consistent units)
-  real(8), parameter::arad=7.56e-15 ! erg/cm^3 deg^-4
+  real(8), parameter :: cl = 1.d0  ! cm/s (use any consistent units)
 end module constants
 
 module modelpara
   implicit none
-  real(8),parameter::  rho0 = 1.0d0! [g/cm^3]
-  real(8),parameter::  kap0 = 1.0d0! [cm^2/g]
-  real(8),parameter:: erad0 = 1.0d10! [erg/cm^3]
-  real(8),parameter:: erad1 = 1.0d20! [erg/cm^3]
+  real(8),parameter:: rho0  = 1.0d0 ! [g/cm^3]
+  real(8),parameter:: kap0  = 0.0d0 ! [cm^2/g]
+  real(8),parameter:: erad0 = 1.0d-4 ! [erg/cm^3]
+  real(8),parameter:: erad1 = 1.0d0 ! [erg/cm^3]
 end module modelpara
 
 module weno5
@@ -66,26 +65,26 @@ end module weno5
 module gridmod
   implicit none
   integer, parameter :: mgn = 3
-  integer, parameter :: izones = 100
-  integer, parameter :: jzones = 1
+  integer, parameter :: izones = 200
+  integer, parameter :: jzones = 200
   integer, parameter :: kzones = 1
   integer, parameter :: in = izones + 2*mgn +1
-  integer, parameter :: jn = 1
+  integer, parameter :: jn = jzones + 2*mgn +1
   integer, parameter :: kn = 1
   integer, parameter :: is = 1 + mgn
   integer, parameter :: ie = izones + mgn
-  integer, parameter :: js = 1
-  integer, parameter :: je = 1
+  integer, parameter :: js = 1 + mgn
+  integer, parameter :: je = jzones + mgn
   integer, parameter :: ks = 1
   integer, parameter :: ke = 1
 
-  real(8), parameter :: x1min=0.d0, x1max=1.d0
-  real(8), parameter :: x2min=0.d0, x2max=0.0d0
+  real(8), parameter :: x1min=0.d0, x1max=5.0d0
+  real(8), parameter :: x2min=0.d0, x2max=5.0d0
   real(8), parameter :: x3min=0.d0, x3max=0.0d0
 
   real(8):: dx ! (xmax-xmin)/izones
-  real(8):: dy ! z-grid spacing (unused here; kn=1, effectively 1D)
-  real(8):: dz ! z-grid spacing (unused here; kn=1, effectively 1D)
+  real(8):: dy ! (ymax-ymin)/jzones
+  real(8):: dz ! z-grid spacing (unused here; kn=1, effectively 2D)
   
   real(8),dimension(in)::x1a,x1b
   real(8),dimension(jn)::x2a,x2b
@@ -101,6 +100,14 @@ contains
     enddo
     do i=1,in-1
        x1b(i) = 0.5d0*(x1a(i+1)+x1a(i))
+    enddo
+
+    dy=(x2max-x2min)/jzones
+    do j=1,jn
+       x2a(j) = dy*(j-(mgn+1))+x2min
+    enddo
+    do j=1,jn-1
+       x2b(j) = 0.5d0*(x2a(j+1)+x2a(j))
     enddo
     
     return
@@ -165,7 +172,7 @@ module statemod
   real(8),dimension(in,jn,kn):: d,ei,tempK
   real(8),dimension(in,jn,kn):: kappa
   !! kappa : absorption opacity [cm^2/g] (used via rho*kappa)
-  real(8):: eimin,eradmin
+  real(8):: eimin,fradmin
 
   real(8),dimension(    in,jn,kn)::Erad
   !! Erad : angular integral (energy-like density), E = sum_m dth(m) * fdis_m
@@ -181,27 +188,28 @@ contains
     implicit none
     integer :: i,j,k,m
 
-      do k=ks,ke
-      do j=js,je
-      do i=1,in
-          d(i,j,k) = rho0   ! [g cm^-3]
-      kappa(i,j,k) = kap0   ! [cm^2/g]
-      enddo
-      enddo
-      enddo
-
-    
+    do k=ks,ke
+    do j=js-mgn,je+mgn
+    do i=is-mgn,ie+mgn
+       d(i,j,k) = rho0
+       kappa(i,j,k) = kap0
+       ei(i,j,k)   = 0.0d0
+    enddo
+    enddo
+    enddo
+    fradmin = 1.0d10
     do k=ks,ke
     do j=js,je
     do i=is,ie
         do m=1,mang
            fdis(m,i,j,k) = erad0/dth(m)
-           flte(m,i,j,k) = erad0/dth(m) ! [erg/cm^3]
+           flte(m,i,j,k) = 0.0d0 ! [erg/cm^3]
+           fradmin = min (fradmin, fdis(m,i,j,k))
        enddo
     enddo
     enddo
     enddo
-    call RadBoundaryCondition
+ 
   end subroutine GenerateProblem
 end module statemod
 
@@ -213,41 +221,90 @@ subroutine RadBoundaryCondition
   implicit none
   integer::i,j,k,m
 
-  select case(angsetup)
-  case(grid_aligned)
-     do k=ks,ke
-     do j=js,je
-     do i=1,mgn
-        fdis(1     ,is-i,j,k) = 1.0d20/dth(1)
-        fdis(2:mang,is-i,j,k) = 1.0d10/dth(2:mang)
+  do k=ks,ke
+  do j=js,je
+  do i=1,mgn
+     do m=1,mang
+        if(mux(m) >= 0.0d0) then
+           fdis(m     ,is-i,j,k) = erad0/dth(m) ! fixed
+        else
+           fdis(m     ,is-i,j,k) = fdis(m,is,j,k) ! outflos
+        endif
      enddo
-     enddo
-     enddo
-  case(staggered)
-     do k=ks,ke
-     do j=js,je
-     do i=1,mgn
-        fdis(1       ,is-i,j,k) = 1.0d20/dth(1)
-        fdis(2:mang-1,is-i,j,k) = 1.0d10/dth(2:mang-1)
-        fdis(mang    ,is-i,j,k) = 1.0d20/dth(mang)
-     enddo
-     enddo
-     enddo
-end select
+  enddo
+  enddo
+  enddo
 
   do k=ks,ke
   do j=js,je
   do i=1,mgn
      do m=1,mang
-!        if(mux(m) > 0)then
-           fdis(m,ie+i,j,k) = fdis(m,ie,j,k)
-!        else
-!           fdis(m,ie+i,j,k) = arad*tempMed**4/dth(m)
-!        endif
+        if(mux(m) > 0.0d0) then
+           fdis(m     ,ie+i,j,k) = fdis(m,is,j,k) ! outflos
+        else
+           fdis(m     ,ie+i,j,k) = erad0/dth(m) ! fixed
+        endif
      enddo
   enddo
   enddo
   enddo
+
+  ! j-direction
+
+  select case(angsetup)
+  case(grid_aligned)
+     do k=ks,ke
+     do i=is,ie
+     do j=1,mgn
+        if(x1b(i) < 1.0d0 )then
+           do m=1,mang
+              fdis(m,i,js-j,k) = erad0/dth(m)
+              if (m == 3 ) fdis(m,i,js-j,k) = erad1/dth(m)
+           enddo
+        else if(x1b(i) > 4.0d0 )then
+           do m=1,mang
+              fdis(m,i,js-j,k) = erad0/dth(m)
+              if (m == 7 ) fdis(m,i,js-j,k) = erad1/dth(m)
+           enddo
+        else
+           do m=1,mang
+              if(muy(m) >= 0.0d0) then
+                 fdis(m,i,js-j,k) = erad0/dth(m) ! fixed
+              else
+                 fdis(m,i,js-j,k) = fdis(m,i,js,k) ! outflow
+              endif
+           enddo
+        endif
+     enddo
+     enddo
+     enddo
+
+  case(staggered)
+     do k=ks,ke
+     do i=is,ie
+     do j=1,mgn
+        do m=1,mang
+           fdis(m,i,js-j,k) = fdis(m,i,js,k) ! adhoc
+        enddo
+     enddo
+     enddo
+     enddo
+
+  end select
+  
+  do k=ks,ke
+  do i=is,ie
+  do j=1,mgn
+     do m=1,mang
+        if(muy(m) > 0.0d0) then
+           fdis(m,i,je+j,k) = fdis(m,i,je-j+1,k) ! outflow
+        else
+           fdis(m,i,je+j,k) = erad0/dth(m) ! fixed
+        endif
+     enddo
+   enddo
+   enddo
+   enddo
 
    return
 end subroutine RadBoundaryCondition
@@ -302,6 +359,47 @@ subroutine RadFlux1
 
   end subroutine RadFlux1
 
+  !> Compute y-direction numerical fluxes using WENO5 + LF splitting.
+  !! The flux array `fy` is defined at cell interfaces (j+1/2) and stored at index j:
+  !! `fy(m,i,j,k) = F_y(i,j+1/2,k; direction m)`.
+subroutine RadFlux2
+    use omp_lib
+    integer :: i,j,k,m
+    real(8) :: b, beta
+    real(8) :: gp_mm,gp_m,gp_0,gp_p,gp_pp
+    real(8) :: gm_mm,gm_m,gm_0,gm_p,gm_pp
+
+    ! fy(m,i,j,k) is flux at j+1/2 (stored at j)
+
+!$omp parallel do default(shared) private(i,j,k,m,b,beta,gp_mm,gp_m,gp_0,gp_p,gp_pp,gm_mm,gm_m,gm_0,gm_p,gm_pp) collapse(3) schedule(static)
+    do k=ks,ke
+    do i=is,ie
+    do j=js-1,je
+       do m=1,mang
+          b = cl*muy(m); beta = abs(b)
+
+          gp_mm = 0.5d0*(b+beta)*fdis(m,i,j-2,k)
+          gp_m  = 0.5d0*(b+beta)*fdis(m,i,j-1,k)
+          gp_0  = 0.5d0*(b+beta)*fdis(m,i,j  ,k)
+          gp_p  = 0.5d0*(b+beta)*fdis(m,i,j+1,k)
+          gp_pp = 0.5d0*(b+beta)*fdis(m,i,j+2,k)
+
+          ! Right-biased stencil for the negative flux at j+1/2:
+          gm_mm = 0.5d0*(b-beta)*fdis(m,i,j-1,k)
+          gm_m  = 0.5d0*(b-beta)*fdis(m,i,j  ,k)
+          gm_0  = 0.5d0*(b-beta)*fdis(m,i,j+1,k)
+          gm_p  = 0.5d0*(b-beta)*fdis(m,i,j+2,k)
+          gm_pp = 0.5d0*(b-beta)*fdis(m,i,j+3,k)
+
+          fy(m,i,j,k) =   weno5_plus(gp_mm,gp_m,gp_0,gp_p,gp_pp)  &
+                       + weno5_minus(gm_mm,gm_m,gm_0,gm_p,gm_pp)
+       enddo
+    enddo
+    enddo
+    enddo
+!$omp end parallel do
+
+  end subroutine RadFlux2
 end module fluxmod
 
 module timemod
@@ -315,7 +413,7 @@ module timemod
   real(8)::time,dt
   real(8),parameter:: cfl=0.1d0
   data time / 0.0d0 /
-  real(8),parameter:: timemax=1.0d-10
+  real(8),parameter:: timemax=20.0d0
   real(8),parameter:: dtout=timemax/100
 contains
   subroutine TimeStepControl
@@ -332,12 +430,12 @@ contains
   do i=is,ie
      dtsrc = 1.0d0/(d(i,j,k)*kappa(i,j,k)*cl) 
      dtl1  = (x1a(i+1)-x1a(i))/cl
-!     dtl2  = (x2a(j+1)-x2a(j))/cl
+     dtl2  = (x2a(j+1)-x2a(j))/cl
 !         dtl3 =(x1a(i+1)-x1a(i))/(abs(v1(i,j,k)) +cs(i,j,k))
 !         dtlocal = min (dtl1,dtl2)
 !         if(i.eq.is)write(6,*) "dt",dtsrc,dtl1
-!     dtlocal = min(dtl1,dtl2)
-     dtlocal = min(dtl1,dtsrc*10.0d0)
+     dtlocal = min(dtl1,dtl2)
+!     dtlocal = min(dtl1,dtl2,dtsrc)
      if(dtlocal .lt. dtmin) dtmin = dtlocal
   enddo
   enddo
@@ -368,7 +466,8 @@ subroutine UpdateRad
     do i=is,ie
        do m=1,mang
           fstar(m,i,j,k) = fdis(m,i,j,k) &
-               - dt/dx * ( fx(m,i,j,k) - fx(m,i-1,j,k) )
+               - dt/dx * ( fx(m,i,j,k) - fx(m,i-1,j,k) ) &
+               - dt/dy * ( fy(m,i,j,k) - fy(m,i,j-1,k) )
        enddo
     enddo
     enddo
@@ -392,11 +491,12 @@ subroutine UpdateRadWithSource
     do k=ks,ke
     do j=js,je
     do i=is,ie
-         alpha = d(i,j,k)*kappa(i,j,k) *cl*dt
-         do m=1,mang
-            flte(m,i,j,k) = arad*(tempK(i,j,k))**4 /dth(m)! [erg/cm^3/rad]
-            fdis(m,i,j,k) = (fstar(m,i,j,k) + alpha* flte(m,i,j,k))/(1.0d0+alpha)
-         enddo
+       kappa(i,j,k) = kap0/d(i,j,k)    ! [cm^2/g] absorption opacity per mass alpha = d(i,j,k)*kappa(i,j,k) *cl*dt
+       alpha = d(i,j,k)*kappa(i,j,k) *cl*dt
+       do m=1,mang
+          flte(m,i,j,k) = 0.0d0 ! [erg/cm^3/rad]
+          fdis(m,i,j,k) = (fstar(m,i,j,k) + alpha* flte(m,i,j,k))/(1.0d0+alpha)
+       enddo
     enddo
     enddo
     enddo
@@ -422,9 +522,12 @@ subroutine Output(flag_force,flag_binary,dirname)
   integer:: unitbin,unitasc
   integer,parameter:: gs = 1 !! we do not have to write all ghost zone
   integer,parameter:: nrad=mang
+  integer,parameter:: nhyd=2
   real(8)::x1out(is-gs:ie+gs,2)
+  real(8)::x2out(js-gs:je+gs,2)
   real(8)::thout(1:mang,3)
   real(4)::radout(mang,is-gs:ie+gs,js-gs:je+gs,ks)
+  real(4)::hydout(is-gs:ie+gs,js-gs:je+gs,ks,nhyd)
 
   logical, save:: is_inited
   data is_inited /.false./
@@ -440,24 +543,32 @@ subroutine Output(flag_force,flag_binary,dirname)
      write(filename,'(a3,i5.5,a4)')"unf",nout,".dat"
      filename = trim(dirname)//filename
      
-     x1out(is-gs:ie+gs,1) = x1b(is-gs:ie+gs)
-     x1out(is-gs:ie+gs,2) = x1a(is-gs:ie+gs)
+     x1out(is:ie,1) = x1b(is:ie)
+     x1out(is:ie,2) = x1a(is:ie)
 
+     x2out(js:je,1) = x2b(js:je)
+     x2out(js:je,2) = x2a(js:je)
+      
      thout(1:mang,1) = dth(1:mang)
      thout(1:mang,2) = mux(1:mang)
      thout(1:mang,3) = muy(1:mang)
      
-     radout(1:mang,is-gs:ie+gs,js:je,ks) = fdis(1:mang,is-gs:ie+gs,js:je,ks)
-     
+     radout(1:mang,is:ie,js:je,ks) = fdis(1:mang,is:ie,js:je,ks)
+     hydout(is:ie,js:je,ks,1) =    d(  is:ie,js:je,ks)
+     hydout(is:ie,js:je,ks,2) =   ei(  is:ie,js:je,ks)
+      
      write(filename,'(a4,i5.5,a4)')"snap",nout,".bin"
      filename = trim(dirname)//filename
-     open(newunit=unitbin,file=filename,status='replace',form='unformatted',access="stream",action="write")
+     open(newunit=unitbin,file=filename,status='replace',form='binary') 
      write(unitbin) time
-     write(unitbin) izones+2*gs
-     write(unitbin) mang
+     write(unitbin) izones
+     write(unitbin) jzones
+     write(unitbin) mang,nhyd
      write(unitbin) x1out(:,:)
+     write(unitbin) x2out(:,:)
      write(unitbin) thout(:,:)
      write(unitbin) radout(:,:,:,:)
+     write(unitbin) hydout(:,:,:,:)
      close(unitbin)
   else
      !------------------------------------------------------------
@@ -466,7 +577,7 @@ subroutine Output(flag_force,flag_binary,dirname)
 !$omp parallel do default(shared) private(i,j,k,m) collapse(3) schedule(static)
      do k=ks,ke
      do j=js,je
-     do i=is-gs,ie+gs
+     do i=is,ie
         Erad(i,j,k) = 0.d0
         Frad(xdir,i,j,k) = 0.d0
         Frad(ydir,i,j,k) = 0.d0
@@ -483,13 +594,16 @@ subroutine Output(flag_force,flag_binary,dirname)
      write(filename,'(a4,i5.5,a4)')"snap",nout,".dat"
      filename = trim(dirname)//filename
      open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write") 
-     write(unitasc,"((a1,1x),((A),1x),(1PE15.4,1x))") "#","time=", time
-     write(unitasc,"((a1,1x),((A),1x),(i0,1x))")      "#","nx=  ", izones+2*gs
-     write(unitasc,"(A)") "# x E Fx"
+     write(unitasc,"(a1,(1x,(A)),(1x,1PE15.4))") "#","time=",time
+     write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","nx=", izones
+     write(unitasc,"(a1,(1x,(A)),(1x,i0))") "#","ny=", jzones
+     write(unitasc,"(a1,(A))") "#"," x y E Fx Fy"
      k=ks
-     j=js
-     do i=is-gs,ie+gs
-        write(unitasc,"(5(E15.6e3,1x))") x1b(i),Erad(i,j,k),Frad(xdir,i,j,k)
+     do j=js,je
+     do i=is,ie
+        write(unitasc,"(1x,5(1x,E15.6e3))") x1b(i),x2b(j),Erad(i,j,k),Frad(xdir,i,j,k),Frad(ydir,i,j,k)
+     enddo
+        write(unitasc,*)
      enddo
      close(unitasc)
          
@@ -529,6 +643,7 @@ program main
      endif
      call RadBoundaryCondition
      call RadFlux1
+     call RadFlux2
      call UpdateRad
      call UpdateRadWithSource
      time=time+dt

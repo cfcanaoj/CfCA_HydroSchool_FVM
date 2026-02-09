@@ -1,6 +1,6 @@
-# Radiation / 1DPropagation
+# Radiation / 2DShadow
 
-このディレクトリには、輻射輸送の **1D 伝播（Propagation）** のサンプル計算を走らせ、出力を可視化するための一式が入っています。  
+このディレクトリには、輻射輸送の **2D シャドウテスト （Shadow test）** のサンプル計算を走らせ、出力を可視化するための一式が入っています。  
 **S\_N 法（SN） / M1-closure（M1） / Flux-Limited Diffusion（FLD）** の 3 手法を同一設定で比較できます。
 
 
@@ -26,30 +26,15 @@ SN の場合は`m1`を`sn`に、FLD の場合は`m1`を`fld`に読み替えて�
 バイナリで出力したい時は`main_m1.f90`の`flag_binary`を`.true.`にしてください。
 
 ## 可視化 (gnuplot)
-### リアルタイム解析
 簡単にリアルタイム解析をしたいときは`RealTimeAnim.plt`を実行します。
 ```bash
 gnuplot RealTimeAnim.plt
 ```
-### 画像作成
 図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` 相当）です。
 ```bash
 gnuplot -e num=10 MakePngFile.plt
-```
-### アニメーション	 
+```	 
 このpngをAnimationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了
 ```bash
 ./MakeAnim.plt m1 1 90
-```
-
-## 可視化 (python matplotlib)
-### 画像作成
-図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` 相当）です。
-```bash
-python -e num=10 MakePlot.py m1 10
-```
-### アニメーション	 
-Animationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了
-```bash
-./MakeAnim.py m1 1 90
 ```

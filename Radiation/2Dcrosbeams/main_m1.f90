@@ -1,16 +1,14 @@
 module units
   implicit none
-  real(8),parameter::cl=3.0d10 ! cm/s
-  real(8),parameter::arad=7.56e-15 ! erg/cm^3 deg^-4
+  real(8),parameter::cl=1.0d0 ! cm/s
 end module units
 
 module modelpara
   implicit none
-  real(8),parameter:: rho0=1.0d0,rho1=1.0d3 ! [g/cm^3]
-  real(8),parameter:: kap0=0.1d0! [cm^2/g]
-  real(8),parameter:: tempRad=1740 ! [K]
-  real(8),parameter:: tempMed=290! [K]
-  real(8),parameter:: Cv=20.79! [erg/cm^3/K]
+  real(8),parameter:: rho0  = 1.0d0 ! [g/cm^3]
+  real(8),parameter:: kap0  = 0.0d0 ! [cm^2/g]
+  real(8),parameter:: erad0 = 1.0d-4 ! [erg/cm^3]
+  real(8),parameter:: erad1 = 1.0d0 ! [erg/cm^3]
 end module modelpara
 
 module commons
@@ -22,11 +20,11 @@ module commons
   real(8)::time,dt
   real(8),parameter:: cfl=0.1d0
   data time / 0.0d0 /
-  real(8),parameter:: timemax=1.0d-10
+  real(8),parameter:: timemax=20.0d0
   real(8),parameter:: dtout=timemax/100
   
-  integer,parameter::izones = 100*4
-  integer,parameter::jzones = 24*4
+  integer,parameter::izones = 200
+  integer,parameter::jzones = 200
   integer,parameter::mgn=2
   integer,parameter::in=izones+2*mgn+1 &
  &                  ,jn=jzones+2*mgn+1 &
@@ -38,8 +36,8 @@ module commons
  &                  ,je=jzones+mgn &
  &                  ,ke=1
 
-  real(8),parameter:: x1min=  0.0d0,x1max=1.0d0
-  real(8),parameter:: x2min=  0.0d0,x2max=0.24d0
+  real(8),parameter:: x1min=  0.0d0,x1max=5.0d0
+  real(8),parameter:: x2min=  0.0d0,x2max=5.0d0
   real(8),dimension(in)::x1a,x1b
   real(8),dimension(jn)::x2a,x2b
   real(8),dimension(kn)::x3a,x3b
@@ -203,43 +201,31 @@ subroutine GenerateProblem
   use modelpara
   implicit none
   integer::i,j,k
-  real(8)::delta
-
-  write(6,*) "Erad med[erg/cm^3]",arad*tempMed**4
-  write(6,*) "Erad in [erg/cm^3]",arad*tempRad**4
-  eimin = rho0*Cv*tempMed
-  eradmin = arad*tempMed**4
 
   do k=ks,ke
-  do j=js,je
-  do i=is,ie
-     tempK(i,j,k) = tempMed
-     delta = 10.0d0*(((x1b(i)-0.5)/0.1)**2+((x2b(j)-0.0)/0.06)**2-1.0d0)
-          d(i,j,k) = rho0 + (rho1 - rho0)/(1+exp(delta))  ! [g cm^-3]
-      kappa(i,j,k) = kap0 *(tempK(i,j,k)/tempMed)**(-3.5d0) &
-    &                    *(    d(i,j,k)/rho0   )**2/d(i,j,k)    ! [cm^2/g]
-
-     ei(i,j,k)   = d(i,j,k)*Cv*tempK(i,j,k)
-     Elte(i,j,k) = arad*(tempK(i,j,k))**4 ! [erg/cm^3]
+  do j=js-mgn,je+mgn
+  do i=is-mgn,ie+mgn
+          d(i,j,k) = rho0
+      kappa(i,j,k) = kap0
+     ei(i,j,k)   = 0.0d0
+     Elte(i,j,k) = 0.0d0 ! [erg/cm^3]
        
   enddo
   enddo
   enddo
 
-  Erad(:,:,:) = arad*(tempMed)**4
-
   do k=ks,ke
-  do j=js,je
-  do i=is,ie
-
-!       Erad(  i,j,k) = 1.0d8
+  do j=js-mgn,je+mgn
+  do i=is-mgn,ie+mgn
+        Erad(  i,j,k) = erad0
      Frad(xdir,i,j,k) = 0.0d0
      Frad(ydir,i,j,k) = 0.0d0
      Frad(zdir,i,j,k) = 0.0d0
-       
   enddo
   enddo
   enddo
+
+  eradmin = erad0
       
   call RadBoundaryCondition
 !      write(6,*) "Gene",Erad(  is-1,js,ks),Erad(  is,js,ks)
@@ -258,10 +244,13 @@ subroutine RadBoundaryCondition
   do k=ks,ke
   do j=js,je
   do i=1,mgn
-     Erad(    is-i,j,k) = arad*tempRad**4
-     Frad(xdir,  is-i,j,k) = fluxfactormax*Erad(is-i,j,k)
-     Frad(ydir:zdir,  is-i,j,k) = 0.0d0
- 
+     if(Frad(xdir,is,j,k) >= 0.0d0) then ! fixed
+        Erad(          is-i,j,k) = erad0 
+        Frad(xdir:zdir,is-i,j,k) = 0.0d0
+     else ! outflow
+        Erad(          is-i,j,k) = Erad(is,j,k) 
+        Frad(xdir:zdir,is-i,j,k) = Frad(xdir:zdir,is,j,k)
+     endif
   enddo
   enddo
   enddo
@@ -269,8 +258,13 @@ subroutine RadBoundaryCondition
   do k=ks,ke
   do j=js,je
   do i=1,mgn
-     Erad(    ie+i,j,k) = Erad(  ie,j,k) 
-     Frad(:,  ie+i,j,k) = Frad(:,ie,j,k)
+     if(Frad(xdir,ie,j,k) >0.0d0) then ! outflow
+        Erad(    ie+i,j,k) = Erad(  ie,j,k) 
+        Frad(:,  ie+i,j,k) = Frad(:,ie,j,k)
+     else
+        Erad(          ie+i,j,k) = erad0 
+        Frad(xdir:zdir,ie+i,j,k) = 0.0d0
+     endif
   enddo
   enddo
   enddo
@@ -279,10 +273,25 @@ subroutine RadBoundaryCondition
   do k=ks,ke
   do i=is,ie
   do j=1,mgn
-     Erad(  i,js-j,k) =  Erad(  i,js+j-1,k)
-     Frad(xdir,i,js-j,k) =  Frad(xdir,i,js+j-1,k)
-     Frad(ydir,i,js-j,k) =  Frad(ydir,i,js+j-1,k)
-     Frad(zdir,i,js-j,k) =  Frad(zdir,i,js+j-1,k)
+     if(x1b(i) < 1.0d0 )then ! inflow
+        Erad(     i,js-j,k) =  erad1
+        Frad(xdir,i,js-j,k) =  erad1/sqrt(2.0d0)*fluxfactormax
+        Frad(ydir,i,js-j,k) =  erad1/sqrt(2.0d0)*fluxfactormax
+     else if(x1b(i) > 4.0d0 )then ! inflow
+        Erad(     i,js-j,k) =  erad1
+        Frad(xdir,i,js-j,k) = -erad1/sqrt(2.0d0)*fluxfactormax
+        Frad(ydir,i,js-j,k) =  erad1/sqrt(2.0d0)*fluxfactormax
+     else
+        if(Frad(ydir,i,js,k) >= 0.0d0) then ! fixed
+           Erad(          i,js-j,k) =  erad0
+           Frad(xdir:zdir,i,js-j,k) =  0.0d0
+        else ! outflow
+           Erad(     i,js-j,k) =  Erad(     i,js,k)
+           Frad(xdir,i,js-j,k) =  Frad(xdir,i,js,k)
+           Frad(ydir,i,js-j,k) =  Frad(ydir,i,js,k)
+        endif
+     endif
+     Frad(zdir,i,js-j,k) =  0.0d0
   enddo
   enddo
   enddo
@@ -290,10 +299,15 @@ subroutine RadBoundaryCondition
   do k=ks,ke
   do i=is,ie
   do j=1,mgn
-     Erad(  i,je+j,k) =  Erad(  i,je-j+1,k)
-     Frad(xdir,i,je+j,k) =  Frad(xdir,i,je-j+1,k)
-     Frad(ydir,i,je+j,k) =  Frad(ydir,i,je-j+1,k)
-     Frad(zdir,i,je+j,k) =  Frad(zdir,i,je-j+1,k)
+        if(Frad(ydir,i,js,k) >= 0.0d0) then ! outflow
+           Erad(     i,je+j,k) =  Erad(     i,je,k)
+           Frad(xdir,i,je+j,k) =  Frad(xdir,i,je,k)
+           Frad(ydir,i,je+j,k) =  Frad(ydir,i,je,k)
+           Frad(zdir,i,je+j,k) =  Frad(zdir,i,je,k)
+        else ! fixed
+           Erad(          i,je+j,k) =  erad0
+           Frad(xdir:zdir,i,je+j,k) =  0.0d0
+        endif
    enddo
    enddo
    enddo
@@ -705,10 +719,7 @@ subroutine UpdateRadSource
   do k=ks,ke
   do j=js,je
   do i=is,ie   
-         kappa(i,j,k) = kap0 *(tempK(i,j,k)/tempMed)**(-3.5) &
-    &                       *(    d(i,j,k)/rho0   )**2/d(i,j,k)    ! [cm^2/g]
-         Elte(i,j,k) = arad*(tempK(i,j,k))**4 ! [erg/cm^3]
-
+         kappa(i,j,k) = kap0/d(i,j,k)    ! [cm^2/g]
          alpha = d(i,j,k)*kappa(i,j,k) *cl*dt
          etmp = Erad(i,j,k)
          Erad(i,j,k) = ( Erad(i,j,k)  + alpha* Elte(i,j,k) )/(1.0d0+alpha)
@@ -716,7 +727,7 @@ subroutine UpdateRadSource
          Frad(ydir,i,j,k) =  Frad(ydir,i,j,k)/(1.0d0+alpha)
          Frad(zdir,i,j,k) =  Frad(zdir,i,j,k)/(1.0d0+alpha)           
 
-         Erad(i,j,k) = max(Eradmin,Erad(i,j,k))
+         Erad(i,j,k) = max(eradmin,Erad(i,j,k))
 
          ei(i,j,k) = ei(i,j,k) - (Erad(i,j,k) - etmp)
          ei(i,j,k) = max(eimin,ei(i,j,k))
