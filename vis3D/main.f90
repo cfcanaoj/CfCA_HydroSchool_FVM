@@ -4,12 +4,12 @@ module hyddata
   integer,parameter:: ntimemax=20000
   real(8):: time, dt
   data time / 0.0d0 /
-  real(8),parameter:: timemax = 2.0d0
-  real(8),parameter:: dtout = 1.0d-2
+  real(8),parameter:: timemax = 1.0d0
+  real(8),parameter:: dtout = timemax/10.0d0
   
-  integer,parameter:: nx = 100
-  integer,parameter:: ny = 100
-  integer,parameter:: nz = 200
+  integer,parameter:: nx = 30
+  integer,parameter:: ny = 30
+  integer,parameter:: nz = 60
   integer,parameter:: ngs= 2
   integer,parameter:: nxtot = nx+2*ngs+1 &
        &             ,nytot = ny+2*ngs+1 &
@@ -222,13 +222,13 @@ subroutine UpdatePrim
   implicit none
   
   real(8):: r,xc,yc,zc
-  real(8),parameter:: omega=0.5d0
+  real(8),parameter:: freq=1.0d0
   real(8):: pi
   integer:: i,j,k
   pi  = acos(-1.d0)
   xc = 0.0d0
   yc = 0.0d0
-  zc = zmax*sin(2*pi*omega*time)
+  zc = zmax*sin(2*pi*freq*time)
 
   do k=ks,ke
   do j=js,je
@@ -245,7 +245,7 @@ subroutine UpdatePrim
         Q(i,j,k,IPR) = 2
         Q(i,j,k,IVX) = 0.0d0
         Q(i,j,k,IVY) = 0.0d0
-        Q(i,j,k,IVZ) = 2*pi*omega*zmax*cos(2*pi*omega*time)
+        Q(i,j,k,IVZ) = 2*pi*freq*zmax*cos(2*pi*freq*time)
      else
         Q(i,j,k,IDN) = 1.0d-2
         Q(i,j,k,IPR) = 2.0d-2
