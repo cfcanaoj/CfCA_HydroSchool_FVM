@@ -523,7 +523,7 @@ subroutine Output(flag_force,flag_binary,dirname)
   integer,save::nout
   data nout / 1 /
   integer:: unitasc, unitbin
-  integer,parameter:: gs=1
+  integer,parameter:: gs=0
   integer,parameter:: nvar=5
   real(8)::x1out(is-gs:ie+gs,2)
   real(8)::x2out(js-gs:je+gs,2)

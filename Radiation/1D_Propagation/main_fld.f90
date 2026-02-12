@@ -5,10 +5,10 @@ end module units
 
 module modelpara
   implicit none
-  real(8),parameter:: rho0=0.25d0! [g/cm^3]
-  real(8),parameter:: kap0=0.04d0! [cm^2/g]
-  real(8),parameter:: erad0=1.0d10! [erg/cm^3]
-  real(8),parameter:: erad1=1.0d20! [erg/cm^3]
+  real(8),parameter::  rho0 = 1.0d0!  [g/cm^3]
+  real(8),parameter::  kap0 = 1.0d0! [cm^2/g]
+  real(8),parameter:: erad0 = 1.0d10! [erg/cm^3]
+  real(8),parameter:: erad1 = 1.0d20! [erg/cm^3]
 end module modelpara
 
 module commons
@@ -467,7 +467,7 @@ subroutine Output(flag_force,flag_binary,dirname)
      open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write")
      write(unitasc,"((a1,1x),(A,1x),(1PE15.4,1x))") "#","time=", time
      write(unitasc,"((a1,1x),(A,1x),(i0,1x))")      "#","nx=  ", izones+2*gs
-     write(unitasc,"(A)") "x E Fx " ! do not use number here
+     write(unitasc,"(A)") "# x E Fx " ! do not use number here
      k=ks
      j=js
      do i=is-gs,ie+gs

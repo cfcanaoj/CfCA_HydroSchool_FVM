@@ -5,10 +5,10 @@ end module units
 
 module modelpara
   implicit none
-  real(8),parameter:: rho0=0.25d0! [g/cm^3]
-  real(8),parameter:: kap0=0.04d0! [cm^2/g]
-  real(8),parameter:: erad0=1.0d10! [erg/cm^3]
-  real(8),parameter:: erad1=1.0d20! [erg/cm^3]
+  real(8),parameter::  rho0 = 1.0d0! [g/cm^3]
+  real(8),parameter::  kap0 = 1.0d3! [cm^2/g]
+  real(8),parameter:: erad0 = 1.0d0 ! [erg/cm^3]
+  real(8),parameter:: erad1 = 1.0d20! [erg/cm^3]
 end module modelpara
 
 module commons
@@ -42,6 +42,8 @@ module commons
   real(8),dimension(kn)::x3a,x3b
   
   real(8),dimension(in,jn,kn):: d
+  real(8),dimension(in,jn,kn):: kappaA
+  real(8),dimension(in,jn,kn):: kappaS
   real(8),dimension(in,jn,kn):: kappa
   real(8),dimension(in,jn,kn):: Elte
 
@@ -80,6 +82,7 @@ module fluxmod
        &            , mfru=mufru,mfrv=mufrv,mfrw=mufrw
   real(8),dimension(mradflx,in,jn,kn):: radnflux1,radnflux2,radnflux3
   logical,parameter::flagEdd=.false.
+  real(8),parameter::fluxfactormax=0.999d0
 
 end module fluxmod
 module closure
@@ -191,7 +194,9 @@ subroutine GenerateGrid
       do j=js,je
       do i=1,in
           d(i,j,k) = rho0   ! [g cm^-3]
-      kappa(i,j,k) = kap0   ! [cm^2/g]
+     kappaA(i,j,k) = 0.0d0   ! [cm^2/g]
+     kappaS(i,j,k) = kap0   ! [cm^2/g]
+     kappa(i,j,k) = kappaA(i,j,k)+kappaS(i,j,k)
        Elte(i,j,k) = erad0 ! [erg/cm^3]
 
       enddo
@@ -202,7 +207,7 @@ subroutine GenerateGrid
       do j=js,je
       do i=1,in
 
-       Erad(  i,j,k) = erad0
+       Erad(  i,j,k) = erad1*exp(-(x1b(i)/0.1)**2/2)
        Frad(xdir,i,j,k) = 0.0d0
        Frad(ydir,i,j,k) = 0.0d0
        Frad(zdir,i,j,k) = 0.0d0
@@ -212,44 +217,41 @@ subroutine GenerateGrid
       enddo
       
    call RadBoundaryCondition
-   write(6,*) "Gene",Erad(  is-1,js,ks),Erad(  is,js,ks)
+ !  write(6,*) "Gene",Erad(  is-1,js,ks),Erad(  is,js,ks)
 
    return
 end subroutine GenerateProblem
 
 
-      subroutine RadBoundaryCondition
-        use commons
-        use modelpara
-      implicit none
-      integer::i,j,k
+subroutine RadBoundaryCondition
+  use commons
+  use modelpara
+  use fluxmod
+  implicit none
+  integer::i,j,k
 
-      do k=ks,ke
-      do j=js,je
-      do i=1,mgn
-          Erad(    is-i,j,k) = erad1
-          if(d(is-i,j,k) .gt. 1.0d0) then
-             Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)/sqrt(3.0d0)
-          else
-             Frad(xdir,  is-i,j,k) = Erad(    is-i,j,k)*0.99
-          endif
-          Frad(ydir:zdir,  is-i,j,k) = 0.0d0
- 
-      enddo
-      enddo
-      enddo
+  do k=ks,ke
+  do j=js,je
+  do i=1,mgn
+  ! Reflection      
+     Erad(     is-i,j,k) = Erad(     is+i-1,j,k)
+     Frad(xdir,is-i,j,k) = Frad(xdir,is+i-1,j,k) 
+  enddo
+  enddo
+  enddo 
 
-      do k=ks,ke
-      do j=js,je
-      do i=1,mgn
-          Erad(    ie+i,j,k) = Erad(  ie,j,k) 
-          Frad(xdir:zdir,  ie+i,j,k) = Frad(xdir:zdir,ie,j,k)
-      enddo
-      enddo
-      enddo
+  do k=ks,ke
+  do j=js,je
+  do i=1,mgn
+  ! outflow      
+     Erad(            ie+i,j,k) = Erad(          ie,j,k) 
+     Frad(xdir:zdir,  ie+i,j,k) = Frad(xdir:zdir,ie,j,k)
+  enddo
+  enddo
+  enddo
 
-      return
-      end subroutine RadBoundaryCondition
+  return
+end subroutine RadBoundaryCondition
 
       subroutine TimestepControl
       use commons
@@ -524,8 +526,9 @@ subroutine UpdateRadSource
   do k=ks,ke
   do j=js,je
   do i=is,ie
-     alpha = d(i,j,k)*kappa(i,j,k)*cl*dt
+     alpha = d(i,j,k)*kappaA(i,j,k)*cl*dt
      Erad(i,j,k) = (Erad(i,j,k) + alpha*Elte(i,j,k))/(1+alpha)
+     alpha = d(i,j,k)*kappa(i,j,k)*cl*dt
      Frad(xdir,i,j,k) = Frad(xdir,i,j,k)/(1.0d0+alpha)
      Frad(ydir,i,j,k) = Frad(ydir,i,j,k)/(1.0d0+alpha)
      Frad(zdir,i,j,k) = Frad(zdir,i,j,k)/(1.0d0+alpha) 
@@ -533,7 +536,7 @@ subroutine UpdateRadSource
      Erad(i,j,k) =  max(Erad(i,j,k),Elte(i,j,k))
 
      fnl = sqrt(Frad(xdir,i,j,k)**2 +Frad(ydir,i,j,k)**2 +Frad(zdir,i,j,k)**2)
-     flm =  0.99*Erad(i,j,k)
+     flm =  fluxfactormax*Erad(i,j,k)
      if(fnl .gt. flm )then
         Frad(xdir,i,j,k) =  Frad(xdir,i,j,k)*flm/fnl
         Frad(ydir,i,j,k) =  Frad(ydir,i,j,k)*flm/fnl
@@ -584,7 +587,7 @@ subroutine UpdateRadAdvection
          Erad(i,j,k) =  max(Erad(i,j,k),Elte(i,j,k))
 
          fnl = sqrt(Frad(xdir,i,j,k)**2 +Frad(ydir,i,j,k)**2 +Frad(zdir,i,j,k)**2) ! dimensional
-         flm =  0.99*Erad(i,j,k)
+         flm =  fluxfactormax*Erad(i,j,k)
          if(fnl .gt. flm )then
             Frad(xdir,i,j,k) =  Frad(xdir,i,j,k)*flm/fnl
             Frad(ydir,i,j,k) =  Frad(ydir,i,j,k)*flm/fnl
@@ -647,7 +650,7 @@ end subroutine UpdateRadAdvection
          open(newunit=unitasc,file=filename,status='replace',form='formatted',access="stream",action="write") 
          write(unitasc,"((a1,1x),((A),1x),(1PE15.4,1x))") "#","time=", time
          write(unitasc,"((a1,1x),((A),1x),(i0,1x))")      "#","  nx=", izones+2*gs
-         write(unitasc,"(A)") "x E Fx " ! do not use number here
+         write(unitasc,"(A)") "# x E Fx "
          k=ks
          j=js
          do i=is-gs,ie+gs

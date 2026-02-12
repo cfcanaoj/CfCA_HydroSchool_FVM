@@ -1,6 +1,6 @@
 # CfCA Hydro School FVM (FY2025)
 
-国立天文台 CfCA（Center for Computational Astrophysics）流体学校（FY2025）向けの、**有限体積法（Finite Volume Method; FVM）** による流体・MHD 計算の実習用コードとテスト問題集です。  
+国立天文台 CfCA（Center for Computational Astrophysics）[流体学校（FY2025）](https://www.cfca.nao.ac.jp/newsletter/2025%E4%BB%A4%E5%92%8C7%E5%B9%B4%E5%BA%A6-%E5%9B%BD%E7%AB%8B%E5%A4%A9%E6%96%87%E5%8F%B0-cfca%E6%B5%81%E4%BD%93%E5%AD%A6%E6%A0%A1%E3%81%AE%E3%81%94%E6%A1%88%E5%86%85)向けの、**有限体積法（Finite Volume Method; FVM）** による流体・MHD 計算の実習用コードとテスト問題集です。  
 「動く完成品を配布する」だけでなく、講義内容（CFL条件、保存則、リーマンソルバー、MUSCL/TVD、境界条件、多次元効果など）を **手元で再現・比較できる** ことを目的にしています。
 
 ---

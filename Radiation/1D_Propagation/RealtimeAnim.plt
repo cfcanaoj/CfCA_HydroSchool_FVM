@@ -4,7 +4,14 @@ set xlabel "x"
 set yrange [*:*]
 set xrange [*:*]
 
-model="m1"
+if (ARGC < 1) {
+   print "Usage: gnuplot -c RealtimeAnim.plt model" 
+   print "Now set model=m1"
+   model="m1"
+}else{
+model = (ARG1)
+}
+
 print "Plot data in ".model
 
 do for [i = 1:40 ] {
