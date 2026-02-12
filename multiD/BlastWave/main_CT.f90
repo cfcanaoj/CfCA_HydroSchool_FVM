@@ -59,7 +59,6 @@ program main
 !$ use omp_lib
 use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
 implicit none
-include "interfaces_ct.inc"
 
 ! time evolution
 integer :: ntime = 0    ! counter of the timestep
@@ -81,6 +80,8 @@ real(8),dimension(NVAR,nxtot,nytot) :: G
 real(8),dimension(3,nxtot,nytot) :: E 
 
 real(8) :: phys_evo(nevo)
+
+real(8), external :: TimestepControl
 
 !logical :: flag_binary = .false.
 
@@ -107,12 +108,12 @@ real(8) :: phys_evo(nevo)
 
 
         call NumericalFlux( 0.5*dt, xf, yf, Q, Bc, Bs, F, G, E )
-        call UpdateConsv( 0.5d0*dt,  xf, xv, yf, yv, F, G, E, Q, Uo, Bso, U, Bs )
+        call UpdateConsv( 0.5d0*dt,  xf, xv, yf, yv, F, G, E, Uo, Bso, U, Bs )
         call Consv2Prim( U, Bs, Q, Bc )
         call BoundaryCondition( Q, Bs, Bc )
 
         call NumericalFlux( dt, xf, yf, Q, Bc, Bs, F, G, E )
-        call UpdateConsv( dt, xf, xv, yf, yv, F, G, E, Q, Uo, Bso, U, Bs )
+        call UpdateConsv( dt, xf, xv, yf, yv, F, G, E, Uo, Bso, U, Bs )
         call Consv2Prim( U, Bs, Q, Bc )
         call BoundaryCondition( Q, Bs, Bc )
 
@@ -144,8 +145,8 @@ end program main
 subroutine GenerateGrid(xf, xv, yf, yv)
 use params, only : nxtot, nytot, nx, ny, ngh, xmax, xmin, ymax, ymin 
 implicit none
-real(8), intent(out) :: xf(:), xv(:)
-real(8), intent(out) :: yf(:), yv(:)
+real(8), intent(out) :: xf(nxtot), xv(nxtot)
+real(8), intent(out) :: yf(nytot), yv(nytot)
 real(8) :: dx,dy
 integer::i,j
 
@@ -171,13 +172,14 @@ end subroutine GenerateGrid
 !       Generate initial condition of the primitive variables
 !-------------------------------------------------------------------
 subroutine GenerateProblem(xv, yv, Q, Bs, Bc )
-use params, only : is, ie, js, je, IDN, IVX, IVY, IVZ, IPR
+use params, only : NVAR, nxtot, nytot, &
+                   is, ie, js, je, IDN, IVX, IVY, IVZ, IPR
 implicit none
 integer::i, j
-real(8), intent(in ) :: xv(:), yv(:)
-real(8), intent(out) :: Q(:,:,:)
-real(8), intent(out) :: Bs(:,:,:)
-real(8), intent(out) :: Bc(:,:,:)
+real(8), intent(in ) :: xv(nxtot), yv(nytot)
+real(8), intent(out) :: Q(NVAR,nxtot,nytot)
+real(8), intent(out) :: Bs(3,nxtot,nytot)
+real(8), intent(out) :: Bc(3,nxtot,nytot)
 real(8) :: pi, B0
 
     B0 = 10d0
@@ -224,114 +226,93 @@ end subroutine GenerateProblem
 !       Boundary Condition of the primitive variables
 !-------------------------------------------------------------------
 subroutine BoundaryCondition( Q, Bs, Bc )
-use params, only : is, ie, js, je, ngh, &
+use params, only : NVAR, nxtot, nytot, is, ie, js, je, ngh, &
                    IDN, IVX, IVY, IVZ, IPR
 implicit none
-real(8), intent(inout) :: Q(:,:,:)
-real(8), intent(inout) :: Bs(:,:,:)
-real(8), intent(inout) :: Bc(:,:,:)
+real(8), intent(inout) :: Q(NVAR,nxtot,nytot)
+real(8), intent(inout) :: Bs(3,nxtot,nytot)
+real(8), intent(inout) :: Bc(3,nxtot,nytot)
 integer::i,j
 
-    ! x inner boundary
+!$omp parallel default(none) &
+!$omp shared(Q,Bs) &
+!$omp private(i,j) 
+
+!$omp do collapse(2) schedule(static)
     do j=js-ngh,je+ngh
     do i=1,ngh
         Q(:,is-i,j)  = Q(:,ie+1-i,j)
-    enddo
-    enddo
-
-    do j=js-ngh,je+ngh
-    do i=1,ngh
-          Bs(1,is-i,j) = Bs(1,ie+1-i,j)
-    enddo
-    enddo
-
-    do j=js-ngh,je+ngh+1
-    do i=1,ngh
-          Bs(2,is-i,j) = Bs(2,ie+1-i,j)
-    enddo
-    enddo
-
-    do j=js-ngh,je+ngh
-    do i=1,ngh
-          Bs(3,is-i,j) = Bs(3,ie+1-i,j)
-    enddo
-    enddo
-
-    ! x outer boundary
-    do j=js-ngh,je+ngh
-    do i=1,ngh
         Q(:,ie+i,j) = Q(:,is+i-1,j)
     enddo
     enddo
+!$omp end do
 
+!$omp do collapse(2) schedule(static)
     do j=js-ngh,je+ngh
     do i=1,ngh
-        Bs(1,ie+i+1,j) = Bs(1,is+i,j)
+          Bs(1,is-i,j) = Bs(1,ie+1-i,j)
+          Bs(1,ie+i+1,j) = Bs(1,is+i,j)
     enddo
     enddo
+!$omp end do
 
+!$omp do collapse(2) schedule(static)
     do j=js-ngh,je+ngh+1
     do i=1,ngh
-        Bs(2,ie+i,j) = Bs(2,is+i-1,j)
+          Bs(2,is-i,j) = Bs(2,ie+1-i,j)
+          Bs(2,ie+i,j) = Bs(2,is+i-1,j)
     enddo
     enddo
+!$omp end do
 
+!$omp do collapse(2) schedule(static)
     do j=js-ngh,je+ngh
     do i=1,ngh
-        Bs(3,ie+i,j) = Bs(3,is+i-1,j)
+          Bs(3,is-i,j) = Bs(3,ie+1-i,j)
+          Bs(3,ie+i,j) = Bs(3,is+i-1,j)
     enddo
     enddo
+!$omp end do
 
+!$omp do collapse(2) schedule(static)
     ! y inner boundary
     do j=1,ngh
     do i=is-ngh,ie+ngh
         Q(:,i,js-j)  = Q(:,i,je+1-j)
+        Q(:,i,je+j)  = Q(:,i,js+j-1)
     enddo
     enddo
+!$omp end do
 
+!$omp do collapse(2) schedule(static)
     do j=1,ngh
     do i=is-ngh,ie+ngh+1
         Bs(1,i,js-j) = Bs(1,i,je+1-j)
+        Bs(1,i,je+j) = Bs(1,i,js+j-1)
     enddo
     enddo
+!$omp end do
 
+!$omp do collapse(2) schedule(static)
     do j=1,ngh
     do i=is-ngh,ie+ngh
         Bs(2,i,js-j) = Bs(2,i,je+1-j)
-    enddo
-    enddo
-
-
-    do j=1,ngh
-    do i=is-ngh,ie+ngh
-        Bs(3,i,js-j) = Bs(3,i,je+1-j)
-    enddo
-    enddo
-
-    ! y outer boundary
-    do j=1,ngh
-    do i=is-ngh,ie+ngh
-       Q(:,i,je+j)  = Q(:,i,js+j-1)
-    enddo
-    enddo
-
-    do j=1,ngh
-    do i=is-ngh,ie+ngh+1
-          Bs(1,i,je+j) = Bs(1,i,js+j-1)
-    enddo
-    enddo
-
-    do j=1,ngh
-    do i=is-ngh,ie+ngh
         Bs(2,i,je+j+1) = Bs(2,i,js+j)
     enddo
     enddo
+!$omp end do
 
+!$omp do collapse(2) schedule(static)
     do j=1,ngh
     do i=is-ngh,ie+ngh
+        Bs(3,i,js-j) = Bs(3,i,je+1-j)
         Bs(3,i,je+j) = Bs(3,i,js+j-1)
     enddo
     enddo
+!$omp end do
+
+!$omp end parallel
+
 
     ! boundary condition for the cell centered B field
     call CellCenterMagneticField(is-ngh, is-1,   js-ngh, je+ngh, Bs, Bc)
@@ -347,13 +328,13 @@ end subroutine BoundaryCondition
 !       Output : U
 !-------------------------------------------------------------------
 subroutine Prim2Consv(Q, Bc, U)
-use params, only : is, ie, js, je, &
+use params, only : NVAR, nxtot, nytot, is, ie, js, je, &
                    IDN, IVX, IVY, IVZ, IPR, &
                    IMX, IMY, IMZ, IEN, gam
 implicit none
-real(8), intent(in) :: Q(:,:,:)
-real(8), intent(in) :: Bc(:,:,:)
-real(8), intent(out) :: U(:,:,:)
+real(8), intent(in) :: Q(NVAR,nxtot,nytot)
+real(8), intent(in) :: Bc(3,nxtot,nytot)
+real(8), intent(out) :: U(NVAR,nxtot,nytot)
 integer::i,j
 
 !$omp parallel do default(none) collapse(2) schedule(static) &
@@ -380,22 +361,20 @@ end subroutine Prim2Consv
 !       Output : Q
 !-------------------------------------------------------------------
 subroutine Consv2Prim( U, Bs, Q, Bc )
-use params, only : is, ie, js, je, &
+use params, only : NVAR, nxtot, nytot, is, ie, js, je, &
                    IDN, IVX, IVY, IVZ, IPR, &
                    IMX, IMY, IMZ, IEN, gam
 implicit none
-real(8), intent(in) :: U(:,:,:),Bs(:,:,:)
-real(8), intent(out) :: Q(:,:,:),Bc(:,:,:)
+real(8), intent(in) :: U(NVAR,nxtot,nytot),Bs(3,nxtot,nytot)
+real(8), intent(out) :: Q(NVAR,nxtot,nytot),Bc(3,nxtot,nytot)
 integer::i,j
 real(8) :: inv_d;
 
         call CellCenterMagneticField(is, ie, js, je, Bs, Bc)
 
-!$omp parallel default(none) &
-!$omp shared(U,Q,Bc) &
-!$omp private(i,j,inv_d) 
-
-!$omp do collapse(2) schedule(static)
+!$omp parallel do default(none) collapse(2) schedule(static) &
+!$omp shared(Q,Bc,U) &
+!$omp private(i,j,inv_d)
         do j=js,je
         do i=is,ie
             Q(IDN,i,j) = U(IDN,i,j)
@@ -408,8 +387,7 @@ real(8) :: inv_d;
                         - 0.5d0*(Bc(1,i,j)**2 + Bc(2,i,j)**2 + Bc(3,i,j)**2) )*(gam-1.0d0)
         enddo
         enddo
-!$omp end do
-!$omp end parallel
+!$omp end parallel do
 
 return
 end subroutine Consv2Prim
@@ -424,11 +402,10 @@ real(8), intent(in) :: Bs(3,nxtot,nytot)
 real(8), intent(out) :: Bc(3,nxtot,nytot)
 integer::i,j
 
-!$omp parallel default(none) &
-!$omp shared(Bc,Bs,ibeg,ifin,jbeg,jfin) &
-!$omp private(i,j) 
 
-!$omp do collapse(2) schedule(static)
+!$omp parallel do default(none) collapse(2) schedule(static) &
+!$omp shared(Bc,Bs,ibeg,ifin,jbeg,jfin) &
+!$omp private(i,j)
         do j=jbeg,jfin
         do i=ibeg,ifin
             Bc(1,i,j) = 0.5d0*( Bs(1,i+1,j) + Bs(1,i,j) )
@@ -436,8 +413,7 @@ integer::i,j
             Bc(3,i,j) = Bs(3,i,j) 
         enddo
         enddo
-!$omp end do
-!$omp end parallel
+!$omp end parallel do
 
 return
 end subroutine CellCenterMagneticField
@@ -446,10 +422,11 @@ end subroutine CellCenterMagneticField
 !       determine dt 
 !-------------------------------------------------------------------
 real(8) function TimestepControl(xf, yf, Q, Bc )
-use params, only : is, ie, js, je, &
+use params, only : nxtot,nytot,NVAR,is, ie, js, je, &
                    IDN, IVX, IVY, IVZ, IPR, gam, Ccfl
 implicit none
-real(8), intent(in) :: xf(:), yf(:),  Q(:,:,:), Bc(:,:,:)
+real(8), intent(in) :: xf(nxtot), yf(nytot)
+real(8), intent(in) :: Q(NVAR,nxtot,nytot), Bc(3,nxtot,nytot)
 real(8)::dtl1,dtl2
 real(8)::dtmin,cf
 integer::i,j
@@ -507,16 +484,17 @@ end subroutine vanLeer
 !     Output: flux : the numerical flux estimated at the cell boundary
 !---------------------------------------------------------------------
 subroutine NumericalFlux( dt, xf, yf, Q, Bc, Bs, F, G, E)
-use params, only : nxtot, nytot, NFLX, NVAR, is, ie, js, je, &
+use params, only : nxtot, nytot, NFLX, NVAR, nxtot, nytot, &
+                   is, ie, js, je, &
                    IVX, IVY, IVZ, IBX, IBY, IBZ, flag_flux
 implicit none
-real(8), intent(in) :: dt,xf(:), yf(:)
-real(8), intent(in) :: Q(:,:,:)
-real(8), intent(in) :: Bc(:,:,:)
-real(8), intent(in) :: Bs(:,:,:)
-real(8), intent(out) :: F(:,:,:)
-real(8), intent(out) :: G(:,:,:)
-real(8), intent(out) :: E(:,:,:)
+real(8), intent(in) :: dt,xf(nxtot), yf(nytot)
+real(8), intent(in) :: Q(NVAR,nxtot,nytot)
+real(8), intent(in) :: Bc(3,nxtot,nytot)
+real(8), intent(in) :: Bs(3,nxtot,nytot)
+real(8), intent(out) :: F(NVAR,nxtot,nytot)
+real(8), intent(out) :: G(NVAR,nxtot,nytot)
+real(8), intent(out) :: E(3,nxtot,nytot)
     
 integer::i,j
 real(8),dimension(NFLX,nxtot,nytot):: Ql,Qr
@@ -1093,16 +1071,16 @@ real(8) :: v_over_c
 return
 end subroutine HLLD
 !!=====================================================================
-subroutine UpdateConsv( dt1, xf, xv, yf, yv, F, G, E, Q, Uo, Bso, U, Bs)
-use params, only : is, ie, js, je
+subroutine UpdateConsv( dt1, xf, xv, yf, yv, F, G, E, Uo, Bso, U, Bs)
+use params, only : NVAR,NFLX,nxtot,nytot,is, ie, js, je
 implicit none
 real(8), intent(in) :: dt1
-real(8), intent(in)  :: xf(:), yf(:)
-real(8), intent(in)  :: xv(:), yv(:)
-real(8), intent(in)  :: F(:,:,:), G(:,:,:)
-real(8), intent(in)  :: Uo(:,:,:), Q(:,:,:), Bso(:,:,:)
-real(8), intent(out) :: U(:,:,:), Bs(:,:,:), E(:,:,:)
-integer::i,j
+real(8), intent(in)  :: xf(nxtot), yf(nytot)
+real(8), intent(in)  :: xv(nxtot), yv(nytot)
+real(8), intent(in)  :: F(NVAR,nxtot,nytot), G(NVAR,nxtot,nytot)
+real(8), intent(in)  :: Uo(NVAR,nxtot,nytot), Bso(3,nxtot,nytot)
+real(8), intent(out) :: U(NVAR,nxtot,nytot), Bs(3,nxtot,nytot), E(3,nxtot,nytot)
+integer::i,j,ihy
 
 !$omp parallel default(none) &
 !$omp shared(U,Uo,Bs,Bso,F,G,E,xf,yf,xv,yv,dt1) &
@@ -1111,8 +1089,10 @@ integer::i,j
 !$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is,ie
-         U(:,i,j) = Uo(:,i,j) + dt1*(- F(:,i+1,j) + F(:,i,j))/(xf(i+1)-xf(i)) &
-                                  + dt1*(- G(:,i,j+1) + G(:,i,j))/(yf(j+1)-yf(j)) 
+      do ihy=1,NVAR
+         U(ihy,i,j) = Uo(ihy,i,j) + dt1*(- F(ihy,i+1,j) + F(ihy,i,j))/(xf(i+1)-xf(i)) &
+                                  + dt1*(- G(ihy,i,j+1) + G(ihy,i,j))/(yf(j+1)-yf(j)) 
+      enddo
       enddo
       enddo
 !$omp end do
@@ -1151,6 +1131,29 @@ integer::i,j
 return
 end subroutine UpdateConsv
 !-------------------------------------------------------------------
+!       Update consevative variables U using numerical flux F
+!-------------------------------------------------------------------
+subroutine SrcTerms( dt1, Q, U )
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, NVAR, is, ie, js, je, gam
+implicit none
+real(8), intent(in) :: dt1
+real(8), intent(in)  :: Q(:,:,:)
+real(8), intent(inout) :: U(:,:,:)
+integer :: i,j
+
+      ! Source term
+!!$omp parallel 
+!      !$omp do private( i, j )
+!      do j=js,je
+!      do i=is,ie
+!      enddo
+!      enddo
+!      !$omp end do
+!!$omp end parallel
+
+end subroutine SrcTerms
+!-------------------------------------------------------------------
 !       Output snapshot files 
 !       Input  : flag, dirname, xf, xv, Q
 !
@@ -1159,13 +1162,13 @@ end subroutine UpdateConsv
 !-------------------------------------------------------------------
 subroutine Output( time, flag, dirname, xv, yv, Q, Bc )
 use params, only : nx, ny, is, ie, js, je, NFLX, NVAR, unitsnap, unitbin, &
-                  IDN, IVX, IVY, IVZ, IPR, dtsnap, flag_binary
+                  nxtot, nytot, IDN, IVX, IVY, IVZ, IPR, dtsnap, flag_binary
 implicit none
 real(8), intent(in) :: time
 logical, intent(in) :: flag 
 character(20), intent(in) :: dirname 
-real(8), intent(in) :: xv(:), yv(:)
-real(8), intent(in) :: Q(:,:,:), Bc(:,:,:)
+real(8), intent(in) :: xv(nxtot), yv(nytot)
+real(8), intent(in) :: Q(NVAR,nxtot,nytot), Bc(3,nxtot,nytot)
 integer::i,j
 character(100)::filename
 real(8), save :: tsnap = - dtsnap
@@ -1229,10 +1232,11 @@ end subroutine makedirs
 !       Output : phys_evo(nevo)
 !-------------------------------------------------------------------
 subroutine RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
-use params, only : is, ie, js, je, gam
+use params, only : NVAR, nxtot, nytot, nevo, is, ie, js, je, gam
 implicit none
-real(8), intent(in) :: xv(:), yv(:), Q(:,:,:), Bc(:,:,:), Bs(:,:,:)
-real(8), intent(out) :: phys_evo(:)
+real(8), intent(in) :: xv(nxtot), yv(nytot)
+real(8), intent(in) :: Q(NVAR,nxtot,nytot), Bc(3,nxtot,nytot), Bs(3,nxtot,nytot)
+real(8), intent(out) :: phys_evo(nevo)
 integer::i,j
 
       do j=js,je
