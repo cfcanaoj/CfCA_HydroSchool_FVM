@@ -61,7 +61,6 @@ program main
 !$ use omp_lib
 use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
 implicit none
-include "interfaces_hdc.inc"
 
 ! time evolution
 integer :: ntime = 0    ! counter of the timestep
@@ -79,6 +78,8 @@ real(8),dimension(NVAR,nxtot,nytot) :: F
 real(8),dimension(NVAR,nxtot,nytot) :: G
 
 real(8) :: phys_evo(nevo)
+
+real(8), external :: TimestepControl
 
       ! make the directory for output
       call makedirs(trim(dirname))
@@ -142,8 +143,8 @@ end program
 subroutine GenerateGrid(xf, xv, yf, yv)
 use params, only : nxtot, nytot, ngh, nx, ny, xmax, xmin, ymax, ymin
 implicit none
-real(8), intent(out) :: xf(:), xv(:)
-real(8), intent(out) :: yf(:), yv(:)
+real(8), intent(out) :: xf(nxtot), xv(nxtot)
+real(8), intent(out) :: yf(nytot), yv(nytot)
 real(8) :: dx,dy
 integer::i,j
 
@@ -171,10 +172,11 @@ end subroutine GenerateGrid
 !-------------------------------------------------------------------
 subroutine GenerateProblem(xv, yv, Q )
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
+                   is, ie, js, je, gam
 implicit none
-real(8), intent(in ) :: xv(:), yv(:)
-real(8), intent(out) :: Q(:,:,:)
+real(8), intent(in ) :: xv(nxtot), yv(nytot)
+real(8), intent(out) :: Q(NVAR,nxtot,nytot)
 integer::i, j
 real(8) :: pi, B0
 
@@ -206,10 +208,10 @@ end subroutine GenerateProblem
 !       Boundary Condition of the primitive variables
 !-------------------------------------------------------------------
 subroutine BoundaryCondition(Q)
-use params, only : nxtot, nytot, ngh, is, ie, js, je
+use params, only : nxtot, nytot, NVAR, ngh, is, ie, js, je
 implicit none
-real(8), intent(inout) :: Q(:,:,:)
-integer::i,j
+real(8), intent(inout) :: Q(NVAR,nxtot,nytot)
+integer::i,j,ihy
 
 !$omp parallel default(none) &
 !$omp shared(Q) &
@@ -218,8 +220,10 @@ integer::i,j
 !$omp do collapse(2) schedule(static)
       do j=1,nytot-1
       do i=1,ngh
-          Q(:,is-i,j) = Q(:,ie+1-i,j)
-          Q(:,ie+i,j) = Q(:,is+i-1,j)
+      do ihy=1,NVAR
+          Q(ihy,is-i,j) = Q(ihy,ie+1-i,j)
+          Q(ihy,ie+i,j) = Q(ihy,is+i-1,j)
+      enddo
       enddo
       enddo
 !$omp end do
@@ -244,17 +248,16 @@ end subroutine BoundaryCondition
 !-------------------------------------------------------------------
 subroutine Prim2Consv(Q, U)
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
+                   is, ie, js, je, gam
 implicit none
-real(8), intent(in) :: Q(:,:,:)
-real(8), intent(out) :: U(:,:,:)
+real(8), intent(in) :: Q(NVAR,nxtot,nytot)
+real(8), intent(out) :: U(NVAR,nxtot,nytot)
 integer::i,j
 
-!$omp parallel default(none) &
+!$omp parallel do default(none) collapse(2) schedule(static) &
 !$omp shared(U,Q) &
 !$omp private(i,j) 
-
-!$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is,ie
           U(IDN,i,j) = Q(IDN,i,j)
@@ -270,8 +273,7 @@ integer::i,j
           U(IPS,i,j) = Q(IPS,i,j)
       enddo
       enddo
-!$omp end do
-!$omp end parallel
+!$omp end parallel do
       
 return
 end subroutine Prim2Consv
@@ -282,18 +284,17 @@ end subroutine Prim2Consv
 !-------------------------------------------------------------------
 subroutine Consv2Prim( U, Q )
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
+                   is, ie, js, je, gam
 implicit none
-real(8), intent(in) :: U(:,:,:)
-real(8), intent(out) :: Q(:,:,:)
+real(8), intent(in) :: U(NVAR,nxtot,nytot)
+real(8), intent(out) :: Q(NVAR,nxtot,nytot)
 integer::i,j
 real(8) :: inv_d;
 
-!$omp parallel default(none) &
+!$omp parallel do default(none) collapse(2) schedule(static) &
 !$omp shared(U,Q) &
 !$omp private(i,j,inv_d) 
-
-!$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is,ie
            Q(IDN,i,j) = U(IDN,i,j)
@@ -310,8 +311,7 @@ real(8) :: inv_d;
            Q(IPS,i,j) = U(IPS,i,j)
       enddo
       enddo
-!$omp end do
-!$omp end parallel
+!$omp end parallel do
 
 return
 end subroutine Consv2Prim
@@ -319,9 +319,10 @@ end subroutine Consv2Prim
 !       determine dt 
 !-------------------------------------------------------------------
 real(8) function TimestepControl(xf, yf, Q)
-use params, only : IDN, IVX, IVY, IPR, IBX, IBY, IBZ, is, ie, js, je, Ccfl, gam
+use params, only : IDN, IVX, IVY, IPR, IBX, IBY, IBZ, NVAR, nxtot, nytot, &
+                   is, ie, js, je, Ccfl, gam
 implicit none
-real(8), intent(in) :: xf(:), yf(:), Q(:,:,:)
+real(8), intent(in) :: xf(nxtot), yf(nytot), Q(NVAR,nxtot,nytot)
 real(8)::dtl1
 real(8)::dtl2
 real(8)::dtmin,cf
@@ -382,10 +383,10 @@ subroutine NumericalFlux( dt, xf, yf, Q, F, G )
 use params, only : nxtot, nytot, NVAR, NFLX, is, ie, js, je, Ccfl, flag_flux
 implicit none
 real(8), intent(in) :: dt
-real(8), intent(in) :: xf(:), yf(:)
-real(8), intent(in) :: Q(:,:,:)
-real(8), intent(out) :: F(:,:,:)
-real(8), intent(out) :: G(:,:,:)
+real(8), intent(in) :: xf(nxtot), yf(nytot)
+real(8), intent(in) :: Q(NVAR,nxtot,nytot)
+real(8), intent(out) :: F(NFLX,nxtot,nytot)
+real(8), intent(out) :: G(NFLX,nxtot,nytot)
 
 integer::i,j
 real(8),dimension(NFLX,nxtot,nytot):: Ql,Qr
@@ -855,30 +856,28 @@ end subroutine HLLD
 !-------------------------------------------------------------------
 subroutine UpdateConsv( dt1, xf, yf, F, G, Uo, U)
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, alpha, Ccfl
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, NFLX, nxtot, nytot, &
+                   is, ie, js, je, gam, alpha, Ccfl
 implicit none
 real(8), intent(in) :: dt1 
-real(8), intent(in)  :: xf(:), yf(:)
-real(8), intent(in)  :: F(:,:,:), G(:,:,:)
-real(8), intent(in)  :: Uo(:,:,:)
-real(8), intent(inout) :: U(:,:,:)
-integer::i,j
+real(8), intent(in)  :: xf(nxtot), yf(nytot)
+real(8), intent(in)  :: F(NFLX,nxtot,nytot), G(NFLX,nxtot,nytot)
+real(8), intent(in)  :: Uo(NVAR,nxtot,nytot)
+real(8), intent(inout) :: U(NVAR,nxtot,nytot)
+integer::i,j,ihy
 
-!$omp parallel default(none) &
-!$omp shared(U,Uo,F,G,xf,yf) &
-!$omp shared(dt1,dt0) &
+!$omp parallel do default(none) collapse(2) schedule(static) &
+!$omp shared(U,Uo,F,G,xf,yf,dt1) &
 !$omp private(i,j)
-
-!$omp do collapse(2) schedule(static)
       do j=js,je
       do i=is,ie
-         U(:,i,j) = Uo(:,i,j) + dt1*(- F(:,i+1,j) + F(:,i,j))/(xf(i+1)-xf(i)) &
-                              + dt1*(- G(:,i,j+1) + G(:,i,j))/(yf(j+1)-yf(j))
+      do ihy=1,NVAR
+         U(ihy,i,j) = Uo(ihy,i,j) + dt1*(- F(ihy,i+1,j) + F(ihy,i,j))/(xf(i+1)-xf(i)) &
+                                  + dt1*(- G(ihy,i,j+1) + G(ihy,i,j))/(yf(j+1)-yf(j))
       enddo
       enddo
-!$omp end do
-
-!$omp end parallel
+      enddo
+!$omp end parallel do
 
 return
 end subroutine UpdateConsv
@@ -887,23 +886,23 @@ end subroutine UpdateConsv
 !-------------------------------------------------------------------
 subroutine SrcTerms( dt1, dt0, Q, U )
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, alpha, Ccfl
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
+                   is, ie, js, je, gam, alpha, Ccfl
 implicit none
 real(8), intent(in) :: dt1, dt0
-real(8), intent(in)  :: Q(:,:,:)
-real(8), intent(inout) :: U(:,:,:)
+real(8), intent(in)  :: Q(NVAR,nxtot,nytot)
+real(8), intent(inout) :: U(NVAR,nxtot,nytot)
 integer :: i,j
 
-      ! Source term
-!$omp parallel 
-      !$omp do private( i, j )
+!$omp parallel do default(none) collapse(2) schedule(static) &
+!$omp shared(U,dt1,dt0) &
+!$omp private(i,j)
       do j=js,je
       do i=is,ie
          U(IPS,i,j) = U(IPS,i,j)*dexp(-alpha*Ccfl*dt1/dt0)
       enddo
       enddo
-      !$omp end do
-!$omp end parallel
+!$omp end parallel do
 
 end subroutine SrcTerms
 !-------------------------------------------------------------------
@@ -915,12 +914,12 @@ end subroutine SrcTerms
 !-------------------------------------------------------------------
 subroutine Output( time, flag, xv, yv, Q )
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, IPS, NVAR, & 
-                   nx, ny, is, ie, js, je, gam, &
+                   nxtot, nytot, nx, ny, is, ie, js, je, gam, &
                    flag_binary, dirname, dtsnap, unitsnap
 implicit none
 real(8), intent(in) :: time! false --> output per dtsnap, true --> force to output
 logical, intent(in) :: flag
-real(8), intent(in) :: xv(:), yv(:), Q(:,:,:)
+real(8), intent(in) :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
 
 integer::i,j
 character(100)::filename
@@ -999,10 +998,11 @@ end subroutine makedirs
 !-------------------------------------------------------------------
 subroutine RealtimeAnalysis(xv,yv,Q,phys_evo)
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, nevo
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
+                   is, ie, js, je, gam, nevo
 implicit none
-real(8), intent(in)  :: xv(:), yv(:), Q(:,:,:)
-real(8), intent(out) :: phys_evo(:)
+real(8), intent(in)  :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
+real(8), intent(out) :: phys_evo(nevo)
 integer::i,j
 real(8) :: tmp
 
