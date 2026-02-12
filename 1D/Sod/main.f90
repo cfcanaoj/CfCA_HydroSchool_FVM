@@ -130,8 +130,7 @@ end subroutine GenerateGrid
 ! Description:
 !   Set initial conditions for a 1D Riemann problem (Sod shock tube).
 !   The primitive variables Q(:,i) = (rho, v, p) are assigned based on xv(i):
-!     - left state (x < 0):   rho = 1.0,   v = 0.0, p = 1.0
-!     - right state (x >= 0): rho = 0.125, v = 0.0, p = 0.1
+!   
 !   The routine typically initializes only the active zone (i=is:ie).
 !   Ghost zones are filled later by BoundaryCondition().
 !=============================================================
