@@ -90,6 +90,7 @@ real(8), external :: TimestepControl
       call GenerateProblem(xv, yv, Q )
       call Prim2Consv(Q, U)
       call BoundaryCondition(Q)
+!$acc update self(xv,yv,Q)
       call Output( time, .TRUE., xv, yv, Q )
 
 
@@ -117,11 +118,13 @@ real(8), external :: TimestepControl
 
          time=time+dt
          ntime = ntime+1
+!$acc update self(Q)
          call Output( time, .FALSE., xv, yv, Q)
 
          print*, "ntime = ",ntime, "time = ",time, dt
 
          if( mod(ntime,10) .eq. 0 ) then
+!$acc update self(Q)
              call RealtimeAnalysis(xv,yv,Q,phys_evo)
              write(unitevo,*) time, phys_evo(1:nevo)
          endif
@@ -159,17 +162,21 @@ integer::i,j
 
 
       dx=(xmax-xmin)/dble(nx)
+!$acc parallel loop present(xf)
       do i=1,nxtot
          xf(i) = dx*(i-(ngh+1))+xmin
       enddo
+!$acc parallel loop present(xf,xv)
       do i=1,nxtot-1
          xv(i) = 0.5d0*(xf(i+1)+xf(i))
       enddo
 
       dy=(ymax-ymin)/dble(ny)
+!$acc parallel loop present(yf)
       do j=1,nytot
          yf(j) = dy*(j-(ngh+1))+ymin
       enddo
+!$acc parallel loop present(yf,yv)
       do j=1,nytot-1
          yv(j) = 0.5d0*(yf(j+1)+yf(j))
       enddo
@@ -198,6 +205,7 @@ real(8) :: pi, B0
       pi = dacos(-1.0d0)
       B0 = 10.0d0
 
+!$acc parallel loop collapse(2) present(xv,yv,Q)
       do j=js,je
       do i=is,ie
          Q(IDN,i,j) = 1.0d0
@@ -230,11 +238,12 @@ implicit none
 real(8), intent(inout) :: Q(NVAR,nxtot,nytot)
 integer::i,j,ihy
 
-!$omp parallel default(none) &
-!$omp shared(Q) &
-!$omp private(i,j) 
+!!$omp parallel default(none) &
+!!$omp shared(Q) &
+!!$omp private(i,j) 
 
-!$omp do collapse(3) schedule(static)
+!!$omp do collapse(3) schedule(static)
+!$acc parallel loop collapse(3) present(Q)
       do j=1,nytot-1
       do i=1,ngh
       do ihy=1,NVAR
@@ -243,9 +252,10 @@ integer::i,j,ihy
       enddo
       enddo
       enddo
-!$omp end do
+!!$omp end do
 
-!$omp do collapse(3) schedule(static)
+!!$omp do collapse(3) schedule(static)
+!$acc parallel loop collapse(3) present(Q)
       do j=1,ngh
       do i=1,nxtot-1
       do ihy=1,NVAR
@@ -254,9 +264,9 @@ integer::i,j,ihy
       enddo
       enddo
       enddo
-!$omp end do
+!!$omp end do
 
-!$omp end parallel
+!!$omp end parallel
 
 return
 end subroutine BoundaryCondition
@@ -280,9 +290,10 @@ real(8), intent(in) :: Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: U(NVAR,nxtot,nytot)
 integer::i,j
 
-!$omp parallel do default(none) collapse(2) schedule(static) &
-!$omp shared(U,Q) &
-!$omp private(i,j) 
+!!$omp parallel do default(none) collapse(2) schedule(static) &
+!!$omp shared(U,Q) &
+!!$omp private(i,j) 
+!$acc parallel loop collapse(2) present(Q,U)
       do j=js,je
       do i=is,ie
           U(IDN,i,j) = Q(IDN,i,j)
@@ -298,7 +309,7 @@ integer::i,j
           U(IPS,i,j) = Q(IPS,i,j)
       enddo
       enddo
-!$omp end parallel do
+!!$omp end parallel do
       
 return
 end subroutine Prim2Consv
@@ -323,9 +334,10 @@ real(8), intent(out) :: Q(NVAR,nxtot,nytot)
 integer::i,j
 real(8) :: inv_d;
 
-!$omp parallel do default(none) collapse(2) schedule(static) &
-!$omp shared(U,Q) &
-!$omp private(i,j,inv_d) 
+!!$omp parallel do default(none) collapse(2) schedule(static) &
+!!$omp shared(U,Q) &
+!!$omp private(i,j,inv_d) 
+!$acc parallel loop collapse(2) present(U,Q)
       do j=js,je
       do i=is,ie
            Q(IDN,i,j) = U(IDN,i,j)
@@ -342,7 +354,7 @@ real(8) :: inv_d;
            Q(IPS,i,j) = U(IPS,i,j)
       enddo
       enddo
-!$omp end parallel do
+!!$omp end parallel do
 
 return
 end subroutine Consv2Prim
@@ -393,6 +405,7 @@ end function TimestepControl
 !     van Leer monotonicity limiter 
 !---------------------------------------------------------------------
 subroutine vanLeer(n,dvp,dvm,dv)
+!$acc routine seq
 use params, only : NVAR 
 implicit none
 real(8),intent(in)::dvp(NVAR),dvm(NVAR)
@@ -435,6 +448,7 @@ real(8) :: dQm(NFLX), dQp(NFLX), dQmon(NFLX)
 Real(8) :: ch
 
       ch = 1.0d0*Ccfl*min( xf(is+1) - xf(is), yf(js+1) - yf(js ) )/dt
+!$acc data create(Ql,Qr)
 
 !$acc kernels      
 !$acc loop collapse(2) independent private(i,j,flx,dQp,dQm,dQmon)
@@ -454,7 +468,8 @@ Real(8) :: ch
 !$acc end kernels
       
 ! ---- x-direction: Riemann solver ----
-!$omp do collapse(2) schedule(static)
+!!$omp do collapse(2) schedule(static)
+!$acc parallel loop collapse(2) present(Ql,Qr,F) private(flx)
       do j=js,je
       do i=is,ie+1 
          if (flag_flux == 1) then 
@@ -465,10 +480,11 @@ Real(8) :: ch
          F(:,i,j) = flx(:)
      end do
      end do
-!$omp end do
+!!$omp end do
 
         ! ---- y-direction: reconstruction ----
-!$omp do collapse(2) schedule(static)
+!!$omp do collapse(2) schedule(static)
+!$acc parallel loop collapse(2) present(Q,Ql,Qr) private(dQp,dQm,dQmon)
      do j=js-1,je+1
      do i=is,ie
            dQp(1:NVAR) = Q(1:NVAR,i,j+1) - Q(1:NVAR,i,j  )
@@ -478,11 +494,12 @@ Real(8) :: ch
            Qr(1:NVAR,i,j  ) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
      end do
      end do
-!$omp end do
+!!$omp end do
 
 
   ! ---- y-direction: Riemann solver ----
-!$omp do collapse(2) schedule(static)
+!!$omp do collapse(2) schedule(static)
+!$acc parallel loop collapse(2) present(Ql,Qr,G) private(flx)
     do j=js,je+1
     do i=is,ie
       if (flag_flux == 1) then
@@ -493,10 +510,11 @@ Real(8) :: ch
       G(:,i,j) = flx(:)
     end do
     end do
-!$omp end do
+!!$omp end do
 
-!$omp end parallel
+!!$omp end parallel
 
+!$acc end data
 return
 end subroutine Numericalflux
 !=============================================================
@@ -513,6 +531,7 @@ end subroutine Numericalflux
 !   flx(:) Conservative flux (mass, momentum, energy)
 !=============================================================
 subroutine HLL(idir,ch,Ql,Qr,flx)
+!$acc routine seq
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
                    IMX, IMY, IMZ, IEN, IPS, NVAR, NFLX, is, ie, js, je, gam, flag_HDC
 implicit none
@@ -629,6 +648,7 @@ end subroutine HLL
 !   flx(:) Conservative flux (mass, momentum, energy)
 !=============================================================
 subroutine HLLD(idir,ch,Ql,Qr,flx)
+!$acc routine seq
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
                    IMX, IMY, IMZ, IEN, IPS, NVAR, NFLX, is, ie, js, je, gam, flag_HDC
 implicit none
@@ -902,9 +922,10 @@ real(8), intent(in)  :: Uo(NVAR,nxtot,nytot)
 real(8), intent(inout) :: U(NVAR,nxtot,nytot)
 integer::i,j,ihy
 
-!$omp parallel do default(none) collapse(3) schedule(static) &
-!$omp shared(U,Uo,F,G,xf,yf,dt1) &
-!$omp private(i,j)
+!!$omp parallel do default(none) collapse(3) schedule(static) &
+!!$omp shared(U,Uo,F,G,xf,yf,dt1) &
+!!$omp private(i,j)
+!$acc parallel loop collapse(3) present(U,Uo,F,G,xf,yf)
       do j=js,je
       do i=is,ie
       do ihy=1,NVAR
@@ -913,7 +934,7 @@ integer::i,j,ihy
       enddo
       enddo
       enddo
-!$omp end parallel do
+!!$omp end parallel do
 
 return
 end subroutine UpdateConsv
@@ -930,15 +951,16 @@ real(8), intent(in)  :: Q(NVAR,nxtot,nytot)
 real(8), intent(inout) :: U(NVAR,nxtot,nytot)
 integer :: i,j
 
-!$omp parallel do default(none) collapse(2) schedule(static) &
-!$omp shared(U,dt1,dt0) &
-!$omp private(i,j)
+!!$omp parallel do default(none) collapse(2) schedule(static) &
+!!$omp shared(U,dt1,dt0) &
+!!$omp private(i,j)
+!$acc parallel loop collapse(2) present(U)
       do j=js,je
       do i=is,ie
          U(IPS,i,j) = U(IPS,i,j)*dexp(-alpha*Ccfl*dt1/dt0)
       enddo
       enddo
-!$omp end parallel do
+!!$omp end parallel do
 
 end subroutine SrcTerms
 !=============================================================
