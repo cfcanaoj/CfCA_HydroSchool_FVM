@@ -58,7 +58,6 @@ integer, parameter :: unitevo =11
 end module
 
 program main
-!$ use omp_lib
 use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
 implicit none
 
