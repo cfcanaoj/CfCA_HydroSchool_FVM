@@ -84,7 +84,7 @@ real(8), external :: TimestepControl
 
       ! make the directory for output
       call makedirs(trim(dirname))
-
+!$acc data create(xf,xv,yf,yv, Uo, U, Q, F,G)
       write(6,*) "setup grids and initial condition"
       call GenerateGrid(xf, xv, yf, yv)
       call GenerateProblem(xv, yv, Q )
@@ -130,7 +130,7 @@ real(8), external :: TimestepControl
       enddo mloop
 
       close(unitevo)
-
+!$acc end data 
 !      call Output( time, .TRUE.,xv, yv, Q)
 
 !      write(6,*) "program has been finished"
@@ -373,9 +373,8 @@ real(8)::dtmin,cf
 integer::i,j
 
       dtmin=1.0d90
-
-!$omp parallel do default(none) collapse(2) schedule(static) &
-!$omp shared(xf,yf,Q) private(dtl1,dtl2,cf) reduction(min:dtmin)
+!$acc kernels      
+!$acc loop collapse(2) private(dtl1,dtl2,cf) reduction(min:dtmin)
       do j=js,je
       do i=is,ie
          cf = dsqrt( (gam*Q(IPR,i,j) + Q(IBX,i,j)**2 + Q(IBY,i,j)**2 + Q(IBZ,i,j)**2)/Q(IDN,i,j))
@@ -384,7 +383,7 @@ integer::i,j
          dtmin = min(dtl1,dtl2,dtmin)
       enddo
       enddo
-!$omp end parallel do
+!$acc end kernels
 
       TimestepControl = Ccfl* dtmin
 
@@ -437,12 +436,8 @@ Real(8) :: ch
 
       ch = 1.0d0*Ccfl*min( xf(is+1) - xf(is), yf(js+1) - yf(js ) )/dt
 
-!$omp parallel default(none) &
-!$omp shared(Q,F,G,Ql,Qr,xf,yf,ch) &
-!$omp private(i,j,flx,dQp,dQm,dQmon)
-
-! numerical flux in the x direction
-!$omp do collapse(2) schedule(static)
+!$acc kernels      
+!$acc loop collapse(2) independent private(i,j,flx,dQp,dQm,dQmon)
       do j=js,je
       do i=is-1,ie+1
          dQp(1:NVAR) = Q(1:NVAR,i+1,j) - Q(1:NVAR,i  ,j)
@@ -456,8 +451,8 @@ Real(8) :: ch
          Qr(1:NVAR,i  ,j) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
       enddo
       enddo
-!$omp end do
-
+!$acc end kernels
+      
 ! ---- x-direction: Riemann solver ----
 !$omp do collapse(2) schedule(static)
       do j=js,je
