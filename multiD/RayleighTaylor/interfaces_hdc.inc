@@ -26,9 +26,11 @@ interface
     real(8), intent(out) :: U(:,:,:)
     end subroutine Prim2Consv
 
-    subroutine BoundaryCondition(Q)
-    use params, only : nxtot, nytot, ngh, is, ie, js, je
+    subroutine BoundaryCondition(yf,Q)
+    use params, only : nxtot, nytot, ngh, is, ie, js, je, &
+                   IDN,IVX,IVY,IVZ,IPR,IBX,IBY,IBZ,IPS,grav_accy
     implicit none
+    real(8), intent(in) :: yf(:)
     real(8), intent(inout) :: Q(:,:,:)
     end subroutine BoundaryCondition
 
@@ -58,17 +60,26 @@ interface
     real(8), intent(out) :: G(:,:,:)
     end subroutine NumericalFlux
 
-    subroutine UpdateConsv( dt1, dt0, xf, yf, F, G, Q, Uo, U)
+    subroutine UpdateConsv( dt1, xf, yf, F, G, Q, Uo, U)
     use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
                        IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, alpha, Ccfl
     implicit none
-    real(8), intent(in) :: dt1, dt0
+    real(8), intent(in) :: dt1
     real(8), intent(in)  :: xf(:), yf(:)
     real(8), intent(in)  :: F(:,:,:), G(:,:,:)
     real(8), intent(in)  :: Q(:,:,:)
     real(8), intent(in)  :: Uo(:,:,:)
     real(8), intent(inout) :: U(:,:,:)
     end subroutine UpdateConsv
+
+    subroutine SrcTerms( dt1, dt0, Q, U)
+    use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                       IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, alpha, Ccfl
+    implicit none
+    real(8), intent(in) :: dt1, dt0
+    real(8), intent(in)  :: Q(:,:,:)
+    real(8), intent(inout) :: U(:,:,:)
+    end subroutine SrcTerms
 
     subroutine Consv2Prim( U, Q )
     use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &

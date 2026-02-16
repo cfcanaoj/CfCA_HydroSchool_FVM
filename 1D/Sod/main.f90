@@ -6,8 +6,7 @@ real(8),parameter:: timemax=0.2d0 ! simulation end time
 ! coordinate 
 integer, parameter :: nx = 64*4       ! the number of grids in the simulation box
 integer, parameter :: ngh = 2            ! the number of ghost cells
-integer, parameter :: nxtotf = nx+2*ngh+1 ! the total number of face-centered grids including ghost cells
-integer, parameter :: nxtotv = nx+2*ngh   ! the total number of volume-centered grids including ghost cells
+integer, parameter :: nxtot = nx+2*ngh+1 ! the total number of face-centered grids including ghost cells
 integer, parameter :: is = ngh+1         ! the index of the leftmost grid
 integer, parameter :: ie = nx+ngh     ! the index of the rightmost grid
 real(8), parameter :: x1min = -0.5d0, x1max = 0.5d0
@@ -25,42 +24,38 @@ integer, parameter :: IEN = 3
 ! thermodynamics
 real(8),parameter::gam=1.4d0 !! adiabatic index
 
-! Riemann solver
-integer, parameter :: flag_flux = 2 ! 1 (Lax), 2 (HLL)
-
 ! output 
 character(20),parameter::dirname="lax" ! directory name
-
-! snapshot
 integer, parameter :: unitsnap = 17
+real(8), parameter :: dtsnap=5.0d-3     ! time interval to ouput snapshots
 
 ! realtime analysis 
 integer, parameter :: unitevo = 11
-integer, parameter :: nevo = 1    ! the number of variables derived in the realtime analysis
 end module
 
 !===============================================================================
 !
 !===============================================================================
 program main
-use params, only: nxtotf, nxtotv, NVAR, dirname, timemax, nevo, unitevo
+use params, only: nxtot, NVAR, dirname, timemax, unitevo
 implicit none
-include "interfaces.inc"
 
 ! time evolution
 integer :: ntime = 0    ! counter of the timestep
 real(8) :: time = 0.0d0  ! time 
 real(8) :: dt   = 0.0d0  ! time width
 
-
 ! definition of arrays 
-real(8),dimension(nxtotf)::xf
-real(8),dimension(nxtotv)::xv
-real(8),dimension(NVAR,nxtotv) :: U ! conservative variables
-real(8),dimension(NVAR,nxtotv) :: Q ! primitive variables
-real(8),dimension(NVAR,nxtotf) :: F ! numerical flux
+real(8),dimension(nxtot)::xf
+real(8),dimension(nxtot)::xv
+real(8),dimension(NVAR,nxtot) :: U ! conservative variables
+real(8),dimension(NVAR,nxtot) :: Q ! primitive variables
+real(8),dimension(NVAR,nxtot) :: F ! numerical flux
 
+integer, parameter :: nevo = 2    ! the number of variables derived in the realtime analysis
 real(8) ::  phys_evo(nevo)    ! variables derived in the realtime analysis
+
+real(8), external :: TimestepControl
 
 
      ! make the directory for output
@@ -80,7 +75,7 @@ real(8) ::  phys_evo(nevo)    ! variables derived in the realtime analysis
          dt = TimestepControl(xf, Q)
          if( time + dt > timemax ) dt = timemax - time
          call BoundaryCondition(Q)
-         call NumericalFlux(dt, xv, Q, F)
+         call NumericalFlux( dt, xv, Q, F)
          call UpdateConsv( dt, xf, F, U )
          call Consv2Prim( U, Q )
          time=time+dt
@@ -88,13 +83,16 @@ real(8) ::  phys_evo(nevo)    ! variables derived in the realtime analysis
          call Output( time, .FALSE., xv, Q )
 
          if( mod(ntime,10) .eq. 0 ) then
-            call RealtimeAnalysis(xv,Q,phys_evo)
+            call RealtimeAnalysis(nevo,xv,Q,phys_evo)
             write(unitevo,*) time, phys_evo(1:nevo)
          endif
 
          if(time >= timemax) exit 
       enddo 
       call Output( time, .TRUE., xv, Q )
+
+      call AnalysisAfterSimu( time, xv, Q )
+
 end program main
 !=============================================================
 ! GenerateGrid
@@ -110,17 +108,17 @@ end program main
 !   quantities. The number of faces is (number of cells + 1).
 !=============================================================
 subroutine GenerateGrid(xf, xv)
-use params, only : x1min, x1max, nxtotf, nxtotv, ngh, nx
+use params, only : x1min, x1max, nxtot, ngh, nx
 implicit none
-real(8), intent(out) :: xf(:), xv(:)
+real(8), intent(out) :: xf(nxtot), xv(nxtot)
 real(8) :: dx
 integer::i
 
     dx=(x1max-x1min)/nx
-    do i=1,nxtotf
+    do i=1,nxtot
          xf(i) = dx*(i-(ngh+1))+x1min
     enddo
-    do i=1,nxtotv
+    do i=1,nxtot-1
          xv(i) = 0.5d0*(xf(i+1)+xf(i))
     enddo
 
@@ -130,18 +128,17 @@ end subroutine GenerateGrid
 ! GenerateProblem
 ! Description:
 !   Set initial conditions for a 1D Riemann problem (Sod shock tube).
-!   The primitive variables Q(i,:) = (rho, v, p) are assigned based on xv(i):
-!     - left state (x < 0):   rho = 1.0,   v = 0.0, p = 1.0
-!     - right state (x >= 0): rho = 0.125, v = 0.0, p = 0.1
+!   The primitive variables Q(:,i) = (rho, v, p) are assigned based on xv(i):
+!   
 !   The routine typically initializes only the active zone (i=is:ie).
 !   Ghost zones are filled later by BoundaryCondition().
 !=============================================================
 subroutine GenerateProblem(xv, Q)
-use params, only: IDN, IVX, IPR, is, ie
+use params, only: IDN, IVX, IPR, NVAR, is, ie, nxtot
 implicit none
 integer::i
-real(8), intent(in ) :: xv(:)
-real(8), intent(out) :: Q(:,:)
+real(8), intent(in ) :: xv(nxtot)
+real(8), intent(out) :: Q(NVAR,nxtot)
 
       do i=is,ie
          if( xv(i) < 0.0d0 ) then 
@@ -162,12 +159,11 @@ end subroutine GenerateProblem
 ! Description:
 !   Apply boundary conditions by filling ghost cells ( i < is and i > ie ) 
 !   of the primitive array Q.
-!
 !=============================================================
 subroutine BoundaryCondition(Q)
-use params, only : IDN, IVX, IPR, is, ie, ngh
+use params, only : IDN, IVX, IPR, NVAR, is, ie, ngh, nxtot
 implicit none
-real(8), intent(inout) :: Q(:,:)
+real(8), intent(inout) :: Q(NVAR,nxtot)
 integer::i
 
     do i=1,ngh 
@@ -194,10 +190,10 @@ end subroutine BoundaryCondition
 !   Operates on the active zone (i=is:ie).
 !=============================================================
 subroutine Prim2Consv(Q, U)
-use params, only : IDN, IMX, IEN, IVX, IPR, is, ie, gam
+use params, only : IDN, IMX, IEN, IVX, IPR, NVAR, is, ie, nxtot, gam
 implicit none
-real(8), intent(in) :: Q(:,:)
-real(8), intent(out) :: U(:,:)
+real(8), intent(in) :: Q(NVAR,nxtot)
+real(8), intent(out) :: U(NVAR,nxtot)
 integer::i
 
     do i=is,ie
@@ -218,10 +214,10 @@ end subroutine Prim2Consv
 !   Operates on the active zone (i=is:ie).
 !=============================================================
 subroutine Consv2Prim( U, Q )
-use params, only : IDN, IVX, IPR, IMX, IEN, gam, is, ie
+use params, only : IDN, IVX, IPR, IMX, IEN, NVAR, gam, is, ie, nxtot
 implicit none
-real(8), intent(in) :: U(:,:)
-real(8), intent(out) :: Q(:,:)
+real(8), intent(in) :: U(NVAR,nxtot)
+real(8), intent(out) :: Q(NVAR,nxtot)
 integer::i
 
     do i=is,ie
@@ -248,9 +244,9 @@ end subroutine Consv2Prim
 !            where c_s = sqrt(gam * p / rho).
 !=============================================================
 Real(8) Function TimestepControl(xf, Q) 
-use params, only : IDN, IVX, IPR, is, ie, gam 
+use params, only : IDN, IVX, IPR, NVAR, nxtot, is, ie, gam 
 implicit none
-real(8), intent(in) :: xf(:), Q(:,:)
+real(8), intent(in) :: xf(nxtot), Q(NVAR,nxtot)
 real(8)::dtlocal
 real(8)::dtmin
 integer::i
@@ -276,28 +272,29 @@ end function TimestepControl
 !     2) Solve an approximate Riemann problem to obtain the interface flux.
 !=============================================================
 subroutine NumericalFlux( dt, xv, Q, F )
-use params, only : nxtotf, nvar, is, ie, flag_flux
+use params, only : nxtot, nvar, is, ie
 implicit none
 real(8), intent(in)  :: dt
-real(8), intent(in)  :: xv(:)
-real(8), intent(in)  :: Q(:,:)
-real(8), intent(out) :: F(:,:)
-integer :: i
-real(8),dimension(NVAR,nxtotf):: Ql,Qr
+real(8), intent(in)  :: xv(nxtot)
+real(8), intent(in)  :: Q(NVAR,nxtot)
+real(8), intent(out) :: F(NVAR,nxtot)
+integer :: i,ihy
+real(8),dimension(NVAR,nxtot):: Ql,Qr
 real(8),dimension(NVAR):: flx
 
     do i=is-1,ie+1
-        Ql(:,i+1) = Q(:,i) 
-        Qr(:,i  ) = Q(:,i) 
+    do ihy=1,NVAR
+        Ql(ihy,i+1) = Q(ihy,i) 
+        Qr(ihy,i  ) = Q(ihy,i) 
+    enddo
     enddo
 
     do i=is,ie+1
-       if( flag_flux == 1 ) then 
-           call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx)
-       else if (flag_flux == 2) then
-           call HLL(Ql(:,i),Qr(:,i),flx)
-       endif
-        F(:,i)  = flx(:)
+       call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx)
+!       call HLL(Ql(:,i),Qr(:,i),flx)
+       do ihy=1,NVAR 
+           F(ihy,i)  = flx(ihy)
+       enddo
     enddo
 
 return
@@ -447,10 +444,10 @@ end subroutine HLL
 !   U(:,:) Conservative variables updated in-place (active zone i=is:ie).
 !=============================================================
 subroutine UpdateConsv( dt, xf, F, U )
-use params, only : NVAR, is, ie
+use params, only : NVAR, is, ie, nxtot
 implicit none
-real(8), intent(in)  :: F(:,:), dt, xf(:)
-real(8), intent(inout) :: U(:,:)
+real(8), intent(in)  :: F(NVAR,nxtot), dt, xf(nxtot)
+real(8), intent(inout) :: U(NVAR,nxtot)
 integer::i,n
 
     do i=is,ie
@@ -478,12 +475,11 @@ end subroutine UpdateConsv
 !   to avoid missing outputs when the simulation time jumps over an output time.
 !=============================================================
 subroutine Output( time, flag, xv, Q )
-use params, only: IDN, IVX, IPR, dirname, is, ie, unitsnap
+use params, only: IDN, IVX, IPR, NVAR, nxtot, dirname, is, ie, unitsnap, dtsnap
 implicit none
 real(8), intent(in) :: time
 logical, intent(in) :: flag
-real(8), intent(in) :: xv(:), Q(:,:)
-real(8), parameter:: dtsnap=5.0d-3
+real(8), intent(in) :: xv(nxtot), Q(NVAR,nxtot)
 integer::i
 character(40) :: filename
 real(8), save :: tsnap = - dtsnap
@@ -523,48 +519,54 @@ end subroutine Output
 !   Q(:,:)   Primitive variables Q=(rho, v, p)
 !   U(:,:)   Conservative variables U=(rho, mom, E) (optional but useful)
 !=============================================================
-subroutine RealtimeAnalysis(xv,Q,phys_evo)
-use params, only : IDN, IVX, IPR, NVAR, is, ie, gam, nevo, nx, nxtotv
+subroutine RealtimeAnalysis(nevo,xv,Q,phys_evo)
+use params, only : IDN, IVX, IPR, NVAR, is, ie, gam, nx, nxtot
 implicit none
-real(8), intent(in)  :: xv(:), Q(:,:)
-real(8), intent(out) :: phys_evo(:)
+integer, intent(in)  :: nevo
+real(8), intent(in)  :: xv(nxtot), Q(NVAR,nxtot)
+real(8), intent(out) :: phys_evo(nevo)
 integer :: i
-real(8) :: tmp
+real(8) :: tot
 
-      tmp = 0.0d0
+      tot = 0.0d0
       do i=is,ie
-           tmp = tmp + Q(IDN,i)*Q(IPR,i)*xv(i)
+           tot = tot + 1.0d0
       enddo
-      phys_evo(1:nevo) = tmp/dble(nx)
+      phys_evo(1) = tot/dble(nx)
+      phys_evo(2) = tot/dble(nx)
       
 return
 end subroutine
-!!=============================================================
-!! AnalysisAfterSimu
-!! Description:
-!!   Perform post-processing after the time integration has finished.
-!!   This routine is intended to be called once at the end of the run to produce
-!!   summary diagnostics and/or derived outputs.
-!!
-!! Inputs:
-!!   dirname  Output directory name where snapshots/logs are stored
-!!   xv(:)    Cell-center coordinates
-!!   Q(:,:)   Final primitive variables Q=(rho, v, p)
-!!   U(:,:)   Final conservative variables U=(rho, mom, E)
-!!=============================================================
-!!subroutine AnalysisAfterSimu(time,xf,xv,Q)
-!!real(8), intent(in)  :: xf(:), xv(:), Q(:,:)
-!!real(8), intent(in)  :: time
-!!integer :: i
-!!real(8) :: tmp
-!!
-!!      tmp = 0.0d0
-!!      do i=is,ie
-!!           tmp = tmp + 1.0d0
-!!      enddo
-!!      
-!!return
-!!end subroutine
+!=============================================================
+! AnalysisAfterSimu
+! Description:
+!   Perform post-processing after the time integration has finished.
+!   This routine is intended to be called once at the end of the run to produce
+!   summary diagnostics and/or derived outputs.
+!
+! Inputs:
+!   dirname  Output directory name where snapshots/logs are stored
+!   xv(:)    Cell-center coordinates
+!   Q(:,:)   Final primitive variables Q=(rho, v, p)
+!   U(:,:)   Final conservative variables U=(rho, mom, E)
+!=============================================================
+subroutine AnalysisAfterSimu(time,xv,Q)
+use params, only : IDN, IVX, IPR, NVAR, is, ie, gam, nx, nxtot
+implicit none
+real(8), intent(in)  :: xv(nxtot), Q(NVAR,nxtot)
+real(8), intent(in)  :: time
+integer :: i
+real(8) :: tot
+
+      tot = 0.0d0
+      do i=is,ie
+           tot = tot + 1.0d0
+      enddo
+
+!      print*, "nx = ",nx, "tot = ", tot
+      
+return
+end subroutine
 !=============================================================
 ! makedirs
 ! Description:
