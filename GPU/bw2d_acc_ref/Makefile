@@ -7,7 +7,8 @@ all: ${exe}
 .PHONY: all clean allclean
 
 fc= nvfortran
-foptopenacc = -Minfo=accel -acc -gpu=manage
+foptopenacc = -Minfo=accel -acc
+#foptopenacc = -Minfo=accel -acc -gpu=managed
 fopt = -g -traceback -O2
 #fopt=-g -traceback -check all -fpe0
 

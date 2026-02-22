@@ -58,6 +58,7 @@ integer, parameter :: unitevo =11
 end module
 
 program main
+  use omp_lib
 use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
 implicit none
 
@@ -78,31 +79,28 @@ real(8),dimension(NVAR,nxtot,nytot) :: G
 ! realtime analysis
 real(8) :: phys_evo(nevo)
 
-! function 
-real(8), external :: TimestepControl
-
+ real(8)::time_begin,time_end
+ logical,parameter:: benchmarkmode=.true.
       ! make the directory for output
       call makedirs(trim(dirname))
-!$acc data create(xf,xv,yf,yv, Uo, U, Q, F,G)
+!$acc data create(dt,xf,xv,yf,yv, Uo, U, Q, F,G)
       write(6,*) "setup grids and initial condition"
       call GenerateGrid(xf, xv, yf, yv)
       call GenerateProblem(xv, yv, Q )
       call Prim2Consv(Q, U)
       call BoundaryCondition(Q)
-!$acc update self(xv,yv,Q)
       call Output( time, .TRUE., xv, yv, Q )
-
 
       write(6,*) "Start the simulation"
       open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
       ntime = 1
+      time_begin = omp_get_wtime()
       mloop: do !ntime=1,ntimemax
-         dt = TimestepControl(xf, yf, Q)
+         call TimestepControl(xf, yf, Q, dt)
          if( time + dt > timemax ) dt = timemax - time
 
-         Uo(:,:,:) = U(:,:,:)
-
+         call SaveState(U,Uo)
          call NumericalFlux( dt, xf, yf, Q, F, G )
          call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Uo, U )
          call SrcTerms( 0.5d0*dt, dt, Q, U)
@@ -117,24 +115,23 @@ real(8), external :: TimestepControl
 
          time=time+dt
          ntime = ntime+1
-!$acc update self(Q)
-         call Output( time, .FALSE., xv, yv, Q)
+         
+         if(.not. benchmarkmode) call Output( time, .FALSE., xv, yv, Q)
 
-         print*, "ntime = ",ntime, "time = ",time, dt
+         if(.not. benchmarkmode) print*, "ntime = ",ntime, "time = ",time, dt
 
          if( mod(ntime,10) .eq. 0 ) then
-!$acc update self(Q)
-             call RealtimeAnalysis(xv,yv,Q,phys_evo)
-             write(unitevo,*) time, phys_evo(1:nevo)
+            if(.not. benchmarkmode) call RealtimeAnalysis(xv,yv,Q,phys_evo)
+            if(.not. benchmarkmode) write(unitevo,*) time, phys_evo(1:nevo)
          endif
 
          if(time >= timemax) exit mloop
       enddo mloop
-
+      time_end = omp_get_wtime()
+      print *, "sim time [s]:", time_end-time_begin
       close(unitevo)
-!$acc end data 
-!      call Output( time, .TRUE.,xv, yv, Q)
-
+      call Output( time, .TRUE.,xv, yv, Q)
+!$acc end data
 !      write(6,*) "program has been finished"
 !contains
 end program
@@ -161,25 +158,22 @@ integer::i,j
 
 
       dx=(xmax-xmin)/dble(nx)
-!$acc parallel loop present(xf)
       do i=1,nxtot
          xf(i) = dx*(i-(ngh+1))+xmin
       enddo
-!$acc parallel loop present(xf,xv)
       do i=1,nxtot-1
          xv(i) = 0.5d0*(xf(i+1)+xf(i))
       enddo
 
       dy=(ymax-ymin)/dble(ny)
-!$acc parallel loop present(yf)
       do j=1,nytot
          yf(j) = dy*(j-(ngh+1))+ymin
       enddo
-!$acc parallel loop present(yf,yv)
       do j=1,nytot-1
          yv(j) = 0.5d0*(yf(j+1)+yf(j))
       enddo
 
+!$acc update device(xf,xv,yf,yv)
 return
 end subroutine GenerateGrid
 !=============================================================
@@ -204,7 +198,6 @@ real(8) :: pi, B0
       pi = dacos(-1.0d0)
       B0 = 10.0d0
 
-!$acc parallel loop collapse(2) present(xv,yv,Q)
       do j=js,je
       do i=is,ie
          Q(IDN,i,j) = 1.0d0
@@ -223,6 +216,7 @@ real(8) :: pi, B0
       enddo
       enddo
 
+!$acc update device(Q)
 return
 end subroutine GenerateProblem
 !=============================================================
@@ -237,11 +231,6 @@ implicit none
 real(8), intent(inout) :: Q(NVAR,nxtot,nytot)
 integer::i,j,ihy
 
-!!$omp parallel default(none) &
-!!$omp shared(Q) &
-!!$omp private(i,j) 
-
-!!$omp do collapse(3) schedule(static)
 !$acc parallel loop collapse(3) present(Q)
       do j=1,nytot-1
       do i=1,ngh
@@ -251,9 +240,7 @@ integer::i,j,ihy
       enddo
       enddo
       enddo
-!!$omp end do
-
-!!$omp do collapse(3) schedule(static)
+   
 !$acc parallel loop collapse(3) present(Q)
       do j=1,ngh
       do i=1,nxtot-1
@@ -263,12 +250,36 @@ integer::i,j,ihy
       enddo
       enddo
       enddo
-!!$omp end do
-
-!!$omp end parallel
 
 return
 end subroutine BoundaryCondition
+
+
+!=============================================================
+! SaveState
+! Description:
+!=============================================================
+subroutine SaveState(U, Uo)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
+                   is, ie, js, je, gam
+implicit none
+real(8), intent(in) :: U(NVAR,nxtot,nytot)
+real(8), intent(out) :: Uo(NVAR,nxtot,nytot)
+integer::i,j,n
+
+!$acc parallel loop collapse(3) present(U,Uo)
+      do j=js,je
+      do i=is,ie
+         do n=1,NVAR
+            Uo(n,i,j) = U(n,i,j)
+         enddo
+      enddo
+      enddo
+
+return
+end subroutine SaveState
+
 !=============================================================
 ! Prim2Consv
 ! Description:
@@ -289,9 +300,6 @@ real(8), intent(in) :: Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: U(NVAR,nxtot,nytot)
 integer::i,j
 
-!!$omp parallel do default(none) collapse(2) schedule(static) &
-!!$omp shared(U,Q) &
-!!$omp private(i,j) 
 !$acc parallel loop collapse(2) present(Q,U)
       do j=js,je
       do i=is,ie
@@ -308,7 +316,6 @@ integer::i,j
           U(IPS,i,j) = Q(IPS,i,j)
       enddo
       enddo
-!!$omp end parallel do
       
 return
 end subroutine Prim2Consv
@@ -373,17 +380,19 @@ end subroutine Consv2Prim
 !              dt = CFL * min_i [ dx_i / (|v_i| + c_s,i) ]
 !            where c_s = sqrt(gam * p / rho).
 !=============================================================
-real(8) function TimestepControl(xf, yf, Q)
+subroutine TimestepControl(xf, yf, Q, dt)
 use params, only : IDN, IVX, IVY, IPR, IBX, IBY, IBZ, NVAR, nxtot, nytot, &
                    is, ie, js, je, Ccfl, gam
 implicit none
 real(8), intent(in) :: xf(nxtot), yf(nytot), Q(NVAR,nxtot,nytot)
+real(8), intent(inout) :: dt 
 real(8)::dtl1
 real(8)::dtl2
 real(8)::dtmin,cf
 integer::i,j
 
       dtmin=1.0d90
+!$acc data present(xf,yf,Q,dt)
 !$acc kernels      
 !$acc loop collapse(2) private(dtl1,dtl2,cf) reduction(min:dtmin)
       do j=js,je
@@ -395,11 +404,13 @@ integer::i,j
       enddo
       enddo
 !$acc end kernels
-
-      TimestepControl = Ccfl* dtmin
-
+!$acc serial      
+      dt = Ccfl* dtmin
+!$acc end serial
+!$acc end data
+!$acc update host (dt)
 return
-end function TimestepControl
+end subroutine TimestepControl
 !---------------------------------------------------------------------
 !     van Leer monotonicity limiter 
 !---------------------------------------------------------------------
@@ -993,11 +1004,20 @@ character(100)::filename
 real(8), save :: tsnap = - dtsnap
 integer, save :: nsnap = 0
 
+real(8),dimension(is:ie) :: xout
+real(8),dimension(js:je) :: yout
+real(4),dimension(1:5,is:ie,js:je) :: Qouthyd
+real(4),dimension(6:Nvar,is:ie,js:je) :: Qoutmhd
+
 
     if( .not.flag) then
         if( time + 1.0d-14.lt. tsnap+dtsnap) return
     endif
-
+!$acc update host(Q)
+    xout(is:ie) = xv(is:ie)
+    yout(is:ie) = yv(is:ie)
+    Qouthyd(1:5,is:ie,js:je) = real(Q(1:5,is:ie,js:je)) ! single precision
+    Qoutmhd(6:Nvar,is:ie,js:je) = real(Q(6:Nvar,is:ie,js:je))! single precision
     write(filename,'(i5.5)') nsnap
     if( flag_binary ) then
         filename = trim(dirname)//"/snap"//trim(filename)//".bin"
@@ -1007,11 +1027,12 @@ integer, save :: nsnap = 0
         write(unitsnap) ny
         write(unitsnap) 5
         write(unitsnap) NVAR - 5
-        write(unitsnap) xv(is:ie)
-        write(unitsnap) yv(js:je)
-        write(unitsnap) real(Q(1:5,is:ie,js:je)) ! single precision
-        write(unitsnap) real(Q(6:NVAR,is:ie,js:je)) ! single precision
+        write(unitsnap) xout
+        write(unitsnap) yout
+        write(unitsnap) Qouthyd
+        write(unitsnap) Qoutmhd ! single precision
         close(unitsnap)
+        print *, "output binary file:  ",filename,time
     else 
         filename = trim(dirname)//"/snap"//trim(filename)//".dat"
         open(unitsnap,file=filename,form='formatted',action="write")
@@ -1025,9 +1046,9 @@ integer, save :: nsnap = 0
           enddo
           enddo
           close(unitsnap)
-      endif
+          print *, "output ascii file:  ",filename,time
+       endif
 
-    write(6,*) "output binary file:  ",filename,time
 
     nsnap=nsnap+1
     tsnap=tsnap + dtsnap
@@ -1087,7 +1108,7 @@ real(8), intent(out) :: phys_evo(nevo)
 integer::i,j
 real(8) :: tmp
 
-      
+!$acc update host(Q)      
       tmp = 0.0d0
       do j=js,je
       do i=is,ie
