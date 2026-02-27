@@ -33,9 +33,8 @@ integer, parameter :: IPR = 5
 integer, parameter :: IBX = 6
 integer, parameter :: IBY = 7
 integer, parameter :: IBZ = 8
-integer, parameter :: IPS = 9
+integer, parameter :: IPS = 9  
 integer, parameter :: NVAR = 9
-integer, parameter :: NFLX = 9
 
 ! indices of the primitive variables
 integer, parameter :: IVX = 2
@@ -52,14 +51,13 @@ real(8), parameter:: dtsnap=0.5d-2
 logical, parameter :: flag_binary = .false.
 
 ! realtime analysis 
-integer, parameter :: nevo = 1
 integer, parameter :: unitevo =11
 
 end module
 
 program main
 !$ use omp_lib
-use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
+use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax 
 implicit none
 
 ! time evolution
@@ -77,6 +75,7 @@ real(8),dimension(NVAR,nxtot,nytot) :: F
 real(8),dimension(NVAR,nxtot,nytot) :: G
 
 ! realtime analysis
+integer, parameter :: nevo = 1
 real(8) :: phys_evo(nevo)
 
 ! function 
@@ -122,7 +121,7 @@ real(8), external :: TimestepControl
          print*, "ntime = ",ntime, "time = ",time, dt
 
          if( mod(ntime,10) .eq. 0 ) then
-             call RealtimeAnalysis(xv,yv,Q,phys_evo)
+             call RealtimeAnalysis(nevo,xv,yv,Q,phys_evo)
              write(unitevo,*) time, phys_evo(1:nevo)
          endif
 
@@ -185,7 +184,7 @@ end subroutine GenerateGrid
 !   The routine typically initializes only the active zone (i=is:ie).
 !   Ghost zones are filled later by BoundaryCondition().
 !=============================================================
-subroutine GenerateProblem(xv, yv, Q )
+subroutine GenerateProblem( xv, yv, Q )
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
                    IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
                    is, ie, js, je, gam
@@ -421,18 +420,18 @@ end subroutine vanLeer
 !     2) Solve an approximate Riemann problem to obtain the interface fluxes.
 !=============================================================
 subroutine NumericalFlux( dt, xf, yf, Q, F, G )
-use params, only : nxtot, nytot, NVAR, NFLX, is, ie, js, je, Ccfl, flag_flux
+use params, only : nxtot, nytot, NVAR, is, ie, js, je, Ccfl, flag_flux
 implicit none
 real(8), intent(in) :: dt
 real(8), intent(in) :: xf(nxtot), yf(nytot)
 real(8), intent(in) :: Q(NVAR,nxtot,nytot)
-real(8), intent(out) :: F(NFLX,nxtot,nytot)
-real(8), intent(out) :: G(NFLX,nxtot,nytot)
+real(8), intent(out) :: F(NVAR,nxtot,nytot)
+real(8), intent(out) :: G(NVAR,nxtot,nytot)
 
 integer::i,j
-real(8),dimension(NFLX,nxtot,nytot):: Ql,Qr
-real(8),dimension(NFLX):: flx
-real(8) :: dQm(NFLX), dQp(NFLX), dQmon(NFLX)
+real(8),dimension(NVAR,nxtot,nytot):: Ql,Qr
+real(8),dimension(NVAR):: flx
+real(8) :: dQm(NVAR), dQp(NVAR), dQmon(NVAR)
 Real(8) :: ch
 
       ch = 1.0d0*Ccfl*min( xf(is+1) - xf(is), yf(js+1) - yf(js ) )/dt
@@ -448,7 +447,7 @@ Real(8) :: ch
          dQp(1:NVAR) = Q(1:NVAR,i+1,j) - Q(1:NVAR,i  ,j)
          dQm(1:NVAR) = Q(1:NVAR,i  ,j) - Q(1:NVAR,i-1,j)
 
-         call vanLeer(NFLX, dQp, dQm, dQmon)
+         call vanLeer(NVAR, dQp, dQm, dQmon)
 
          ! Ql(i,j) --> W_(i-1/2,j)
          ! Qr(i,j) --> W_(i-1/2,j)
@@ -478,7 +477,7 @@ Real(8) :: ch
      do i=is,ie
            dQp(1:NVAR) = Q(1:NVAR,i,j+1) - Q(1:NVAR,i,j  )
            dQm(1:NVAR) = Q(1:NVAR,i,j  ) - Q(1:NVAR,i,j-1)
-           call vanLeer(NFLX, dQp, dQm, dQmon)
+           call vanLeer(NVAR, dQp, dQm, dQmon)
            Ql(1:NVAR,i,j+1) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
            Qr(1:NVAR,i,j  ) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
      end do
@@ -519,17 +518,17 @@ end subroutine Numericalflux
 !=============================================================
 subroutine HLL(idir,ch,Ql,Qr,flx)
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, IPS, NVAR, NFLX, is, ie, js, je, gam, flag_HDC
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, flag_HDC
 implicit none
 integer, intent(in) :: idir
 real(8),intent(in)  :: ch
 real(8),intent(in)  :: Ql(NVAR), Qr(NVAR)
-real(8),intent(out) :: flx(NFLX)
+real(8),intent(out) :: flx(NVAR)
 integer :: IVpara, IVperp1, IVperp2
 integer :: IBpara, IBperp1, IBperp2
 real(8):: b1
-real(8):: Ul(NFLX), Ur(NFLX)
-real(8):: Fl(NFLX), Fr(NFLX)
+real(8):: Ul(NVAR), Ur(NVAR)
+real(8):: Fl(NVAR), Fr(NVAR)
 real(8):: cfl,cfr
 real(8):: sl, sr
 real(8):: pbl, pbr, ptotl, ptotr
@@ -635,19 +634,19 @@ end subroutine HLL
 !=============================================================
 subroutine HLLD(idir,ch,Ql,Qr,flx)
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, IPS, NVAR, NFLX, is, ie, js, je, gam, flag_HDC
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, is, ie, js, je, gam, flag_HDC
 implicit none
 integer, intent(in) :: idir
 real(8),intent(in)  :: ch
 real(8),intent(in)  :: Ql(NVAR), Qr(NVAR)
-real(8),intent(out) :: flx(NFLX)
+real(8),intent(out) :: flx(NVAR)
 integer :: IVpara, IVperp1, IVperp2
 integer :: IBpara, IBperp1, IBperp2
 real(8):: b1
-real(8):: Ul(NFLX), Ur(NFLX)
-real(8):: Ulst(NFLX), Urst(NFLX)
-real(8):: Uldst(NFLX), Urdst(NFLX)
-real(8):: Fl(NFLX), Fr(NFLX)
+real(8):: Ul(NVAR), Ur(NVAR)
+real(8):: Ulst(NVAR), Urst(NVAR)
+real(8):: Uldst(NVAR), Urdst(NVAR)
+real(8):: Fl(NVAR), Fr(NVAR)
 real(8):: cfl,cfr
 real(8):: S0, S1, S2, S3, S4
 real(8):: pbl, pbr, ptotl, ptotr
@@ -897,12 +896,12 @@ end subroutine HLLD
 !=============================================================
 subroutine UpdateConsv( dt1, xf, yf, F, G, Uo, U)
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, IPS, NVAR, NFLX, nxtot, nytot, &
+                   IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
                    is, ie, js, je, gam, alpha, Ccfl
 implicit none
 real(8), intent(in) :: dt1 
 real(8), intent(in)  :: xf(nxtot), yf(nytot)
-real(8), intent(in)  :: F(NFLX,nxtot,nytot), G(NFLX,nxtot,nytot)
+real(8), intent(in)  :: F(NVAR,nxtot,nytot), G(NVAR,nxtot,nytot)
 real(8), intent(in)  :: Uo(NVAR,nxtot,nytot)
 real(8), intent(inout) :: U(NVAR,nxtot,nytot)
 integer::i,j,ihy
@@ -1062,24 +1061,25 @@ end subroutine makedirs
 !   Q(:,:,:) Primitive variables Q=(rho, v, p)
 !   U(:,:,:) Conservative variables U=(rho, mom, E) (optional but useful)
 !=============================================================
-subroutine RealtimeAnalysis(xv,yv,Q,phys_evo)
+subroutine RealtimeAnalysis(nevo,xv,yv,Q,phys_evo)
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
                    IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
-                   is, ie, js, je, gam, nevo
+                   is, ie, js, je, gam 
 implicit none
+integer, intent(in)  :: nevo
 real(8), intent(in)  :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
 integer::i,j
-real(8) :: tmp
+real(8) :: tot
 
       
-      tmp = 0.0d0
+      tot = 0.0d0
       do j=js,je
       do i=is,ie
-          tmp = tmp + Q(IDN,i,j)*Q(IPR,i,j)/(xv(i)+yv(j))
+          tot = tot + 1.0d0
       enddo
       enddo
-      phys_evo(1:nevo) = 0.0d0
+      phys_evo(1:nevo) = tot
       
 return
 end subroutine
