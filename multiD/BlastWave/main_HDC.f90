@@ -52,12 +52,13 @@ logical, parameter :: flag_binary = .false.
 
 ! realtime analysis 
 integer, parameter :: unitevo =11
+integer, parameter :: nevo = 2
 
 end module
 
 program main
 !$ use omp_lib
-use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax 
+use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
 implicit none
 
 ! time evolution
@@ -76,7 +77,6 @@ real(8),dimension(NVAR,nxtot,nytot) :: F
 real(8),dimension(NVAR,nxtot,nytot) :: G
 
 ! realtime analysis
-integer, parameter :: nevo = 1
 real(8) :: phys_evo(nevo)
 
 ! function 
@@ -139,10 +139,10 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
 
     print*, "ntime = ",ntime, "time = ",time, dt
 
-!    if( mod(ntime,10) .eq. 0 ) then
-!      call RealtimeAnalysis(nevo,xv,yv,Q,phys_evo)
-!      write(unitevo,*) time, phys_evo(1:nevo)
-!    endif
+    if( mod(ntime,10) .eq. 0 ) then
+      call RealtimeAnalysis(xv,yv,Q,phys_evo)
+      write(unitevo,*) time, phys_evo(1:nevo)
+    endif
 
     if(time >= timemax) exit mloop
 !    if(ntime >= 1000) exit mloop
@@ -1077,12 +1077,11 @@ end subroutine makedirs
 !   Q(:,:,:) Primitive variables Q=(rho, v, p)
 !   U(:,:,:) Conservative variables U=(rho, mom, E) (optional but useful)
 !=============================================================
-subroutine RealtimeAnalysis(nevo,xv,yv,Q,phys_evo)
+subroutine RealtimeAnalysis(xv,yv,Q,phys_evo)
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
                    IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
-                   is, ie, js, je, gam 
+                   is, ie, js, je, gam, nevo
 implicit none
-integer, intent(in)  :: nevo
 real(8), intent(in)  :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
 integer::i,j
