@@ -5,13 +5,6 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import re
 
-dirname = sys.argv[1]
-step_s = int(sys.argv[2])
-
-def makedirs(path):
-    if not os.path.isdir(path):
-        os.makedirs(path)
-
 def read_textdata(file):
     with open(foutname, 'r') as data_file:
         line = data_file.readline();
@@ -39,7 +32,7 @@ def read_textdata(file):
     data_dict['Bx'] = data[:,8].reshape(ny,nx)
     data_dict['By'] = data[:,9].reshape(ny,nx)
     data_dict['Bz'] = data[:,10].reshape(ny,nx)
-    data_dict['psi'] = data[:,11].reshape(ny,nx)
+#    data_dict['psi'] = data[:,11].reshape(ny,nx)
 
     return x, y, time, data_dict
 
@@ -53,6 +46,14 @@ def vecpot(x,y,Bx,By):
     
     return Az
 
+dirname = sys.argv[1]
+step = int(sys.argv[2])
+
+foutname = dirname + "/snap%05d.dat"%(step) 
+print("making plot ",foutname)
+
+x, y, time, data = read_textdata(foutname)
+Az = vecpot(x,y,data['Bx'],data['By'])
 
 fig = plt.figure()  
 plt.xlim(0, 1)     
@@ -65,27 +66,24 @@ xmax =  0.5
 ymin = -1.0
 ymax =  1.0
 
-for istep in range(step_s,step_s+1):
-    foutname = dirname + "/snap%05d.dat"%(istep) 
-    print("making plot ",foutname)
+plt.xlim(xmin,xmax)
+plt.ylim(ymin,ymax)
 
-    x, y, time, data = read_textdata(foutname)
+pg00 = plt.text(0.5*(xmin+xmax),ymax*1.1,r"$\mathrm{time}=%.2f$"%(time),horizontalalignment="center")
 
-    Az = vecpot(x,y,data['Bx'],data['By'])
+im=plt.imshow(data['sca'],extent=(xmin,xmax,ymin,ymax),origin="lower",vmin=0,vmax=1)
+cbar = plt.colorbar(im,orientation="vertical")
+cbar.set_label("scalar field")
 
-    plt.xlim(xmin,xmax)
-    plt.ylim(ymin,ymax)
+plt.contour(x,y,Az,linestyles='solid',levels=20,colors="white")
 
-    pg00 = plt.text(0.5*(xmin+xmax),ymax*1.1,r"$\mathrm{time}=%.2f$"%(time),horizontalalignment="center")
+for format_fig in ["pdf","png"]:
+    outdir = dirname + "/" + format_fig + "file"
+    os.makedirs(outdir, exist_ok=True)
 
-    im=plt.imshow(data['sca'],extent=(xmin,xmax,ymin,ymax),origin="lower",vmin=0,vmax=1)
+    outputfile = outdir + "/snap%05d."%(step) + format_fig
 
-    plt.contour(x,y,Az,linestyles='solid',levels=20,colors="white")
-
-    if istep == step_s: 
-        plt.colorbar(im,orientation="vertical")
-
-    makedirs(dirname + "/pdffile")
-    plt.savefig(dirname + "/pdffile/snap%05d.pdf"%(istep),bbox_inches="tight")
+    print("making plot file", outputfile)
+    plt.savefig(outputfile,bbox_inches="tight")
 
 plt.show()

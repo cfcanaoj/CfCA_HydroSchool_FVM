@@ -1,10 +1,45 @@
 import sys
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import re
 
+def read_bindata(file):
+
+    with open(foutname, "rb") as fp: 
+        time = np.fromfile(fp, np.float64, 1).item() 
+        nx, ny, nhyd, nbc = [np.fromfile(fp, np.int32, 1).item() for _ in range(4)]
+
+        xv = np.fromfile(fp, np.float64, nx)
+        yv = np.fromfile(fp, np.float64, ny)
+        Q  = np.fromfile(fp, np.float32, nx * ny * nhyd).reshape(ny, nx, nhyd)
+        Bc = np.fromfile(fp, np.float32, nx * ny * nbc ).reshape(ny, nx, nbc)
+
+    q_names = ['rho', 'vx', 'vy', 'vz', 'pre', 'sca']
+    b_names = ['Bx', 'By', 'Bz']
+
+    data_dict = {name: Q[:, :, i]  for i, name in enumerate(q_names)}
+    data_dict.update({name: Bc[:, :, i] for i, name in enumerate(b_names)})
+
+    return xv, yv, time, data_dict
+
+def vecpot(x,y,Bx,By):
+    Az = np.zeros_like(By)
+    dy = y[1] - y[0]
+    dx = x[1] - x[0]
+    
+    Az[1:, 0] = Az[0, 0] + np.cumsum(0.5*(Bx[1:, 0] + Bx[:-1, 0])*dy)
+    Az[:, 1:] = Az[:, [0]] - np.cumsum(0.5*(By[:, 1:] + By[:, :-1])*dx, axis=1)
+    
+    return Az
+
+###############################
 dirname = sys.argv[1]
 step = int(sys.argv[2])
+
+foutname = dirname + "/snap%05d.bin"%(step) 
+x, y, time, data = read_bindata(foutname)
+Az = vecpot(x,y,data['Bx'],data['By'])
 
 fig = plt.figure()  
 plt.xlim(0, 1)     
@@ -17,49 +52,24 @@ xmax =  0.5
 ymin = -1.0
 ymax =  1.0
 
-foutname = dirname + "/snap%05d.bin"%(step) 
-fp = open(foutname,"rb")
-
-time = np.fromfile(fp,np.float64,1)[0]
-nx   = np.fromfile(fp,np.int32,1)[0]
-ny   = np.fromfile(fp,np.int32,1)[0]
-nhyd = np.fromfile(fp,np.int32,1)[0]
-nbc  = np.fromfile(fp,np.int32,1)[0]
-xv   = np.fromfile(fp,np.float64,nx)
-yv   = np.fromfile(fp,np.float64,ny)
-Q    = np.fromfile(fp,np.float32,nx*ny*nhyd).reshape(ny,nx,nhyd)
-Bc   = np.fromfile(fp,np.float32,nx*ny*nbc).reshape(ny,nx,nbc)
-
-Az = np.zeros([ny,nx])
-
-dy = yv[1] - yv[0]
-dx = xv[1] - xv[0]
-
-for j in range(0,ny-1):
-    for i in range(0,1):
-        Az[j+1,i] = Az[j,i] + 0.5*( Bc[j+1,i,0] + Bc[j,i,0] )*dy
-
-for j in range(0,ny):
-    for i in range(0,nx-1):
-        Az[j,i+1] = Az[j,i] - 0.5*( Bc[j,i+1,1] + Bc[j,i,1] )*dy
-
-sca = Q[:,:,5]
-
-yy, xx = np.meshgrid(yv,xv,indexing="ij")
-
-
 plt.xlim(xmin,xmax)
 plt.ylim(ymin,ymax)
 
 plt.text(0.5*(xmin+xmax),ymax*1.1,r"$\mathrm{time}=%.2f$"%(time),horizontalalignment="center")
-im=plt.imshow(sca[:,:],extent=(xmin,xmax,ymin,ymax),origin="lower",vmin=0,vmax=1)
+im=plt.imshow(data['sca'],extent=(xmin,xmax,ymin,ymax),origin="lower",vmin=0,vmax=1)
+cbar = plt.colorbar(im,orientation="vertical")
+cbar.set_label("scalar field")
 
+yy, xx = np.meshgrid(y,x,indexing="ij")
 plt.contour(xx,yy,Az,linestyles='solid',levels=20,colors="white")
 
-plt.colorbar(im,orientation="vertical")
+for format_fig in ["pdf","png"]:
+    outdir = dirname + "/" + format_fig + "file"
+    os.makedirs(outdir, exist_ok=True)
 
-outputfile = dirname + "/snap%05d.pdf"%(step) 
+    outputfile = outdir + "/snap%05d."%(step) + format_fig
 
-print("making plot file", outputfile)
-plt.savefig(outputfile,bbox_inches="tight", pat_inches=1.0,dpi=1000)
+    print("making plot file", outputfile)
+    plt.savefig(outputfile,bbox_inches="tight")
+
 plt.show()
