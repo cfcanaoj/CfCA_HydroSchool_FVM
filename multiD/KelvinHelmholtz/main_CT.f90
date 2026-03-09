@@ -41,7 +41,7 @@ module params
   real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
 
   ! output 
-  character(20),parameter::dirname="ct_new" ! directory name
+  character(20),parameter::dirname="ct" ! directory name
   logical, parameter :: flag_binary = .false.
     
   ! snapshot
