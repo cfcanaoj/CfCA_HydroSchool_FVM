@@ -4,20 +4,23 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import re
 
-def read_textdata(file):
-    with open(file, "r") as f:
-        time = float(f.readline().split()[-1])
-        nx, ny = map(int, f.readline().split()[-2:])
+def read_bindata(file):
+    with open(file, "rb") as fp: 
+        time = np.fromfile(fp, np.float64, 1).item() 
+        nx, ny, nhyd, nbc = [np.fromfile(fp, np.int32, 1).item() for _ in range(4)]
 
-    arr = np.loadtxt(file).reshape(ny, nx, -1)
+        xv = np.fromfile(fp, np.float64, nx)
+        yv = np.fromfile(fp, np.float64, ny)
+        Q  = np.fromfile(fp, np.float32, nx * ny * nhyd).reshape(ny, nx, nhyd)
+        Bc = np.fromfile(fp, np.float32, nx * ny * nbc ).reshape(ny, nx, nbc)
 
-    x = arr[:, :, 0]
-    y = arr[:, :, 1]
+    q_names = ['rho', 'vx', 'vy', 'vz', 'pre']
+    b_names = ['Bx', 'By', 'Bz']
 
-    names = ["rho", "vx", "vy", "vz", "pre", "Bx", "By", "Bz"]
-    data_dict = {name: arr[:, :, i+2] for i, name in enumerate(names)}
+    data_dict = {name: Q[:, :, i]  for i, name in enumerate(q_names)}
+    data_dict.update({name: Bc[:, :, i] for i, name in enumerate(b_names)})
 
-    return x, y, time, data_dict
+    return xv, yv, time, data_dict
 
 dirname = sys.argv[1]
 step_s = int(sys.argv[2])
@@ -41,14 +44,13 @@ fname_anime = "animation.mp4"
 
 graph_list = [] 
 for istep in range(step_s,step_e+1):
-    foutname = dirname + "/snap%05d.dat"%(istep) 
-
-    print("making plot ",foutname)
-    x, y, time, data = read_textdata(foutname)
+    foutname = dirname + "/snap%05d.bin"%(istep) 
+    x, y, time, data = read_bindata(foutname)
+    print("making plot = ",istep)
 
     pg00 = plt.text(0.5*(xmin+xmax),ymax*1.1,r"$\mathrm{time}=%.2f$"%(time),horizontalalignment="center")
 
-    im=plt.imshow(np.log10(data['rho']),extent=(xmin,xmax,ymin,ymax),origin="lower",vmin=-5,vmax=0)
+    im=plt.imshow(np.log10(data['rho']),extent=(xmin,xmax,ymin,ymax),origin="lower",vmin=1,vmax=2)
 
     if istep == step_s: 
         cbar = plt.colorbar(im,orientation="vertical")

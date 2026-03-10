@@ -1,68 +1,73 @@
 import sys
 import os
 import numpy as np
-import matplotlib
-matplotlib.use("Agg") 
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import re
 
+def read_textdata(file):
+    with open(file, "r") as f:
+        time = float(f.readline().split()[-1])
+        nx, ny = map(int, f.readline().split()[-2:])
+
+    arr = np.loadtxt(file).reshape(ny, nx, -1)
+
+    x = arr[:, :, 0]
+    y = arr[:, :, 1]
+
+    names = ["rho", "vx", "vy", "vz", "pre", "Bx", "By", "Bz"]
+    data_dict = {name: arr[:, :, i+2] for i, name in enumerate(names)}
+
+    return x, y, time, data_dict
+
+def vecpot(x,y,Bx,By):
+    Az = np.zeros_like(By)
+    dy = y[1,0] - y[0,0]
+    dx = x[0,1] - x[0,0]
+    
+    Az[1:, 0] = Az[0, 0] + np.cumsum(0.5*(Bx[1:, 0] + Bx[:-1, 0])*dy)
+    Az[:, 1:] = Az[:, [0]] - np.cumsum(0.5*(By[:, 1:] + By[:, :-1])*dx, axis=1)
+    
+    return Az
+
 dirname = sys.argv[1]
-step_s = int(sys.argv[2])
-step_e = int(sys.argv[3])
+step = int(sys.argv[2])
 
-def makedirs(path):
-    if not os.path.isdir(path):
-        os.makedirs(path)
+foutname = dirname + "/snap%05d.dat"%(step) 
+print("making plot ",foutname)
 
+x, y, time, data = read_textdata(foutname)
+Az = vecpot(x,y,data['Bx'],data['By'])
 
 xmin = -7.5*np.pi
 xmax =  7.5*np.pi
 ymin = -15*np.pi
 ymax =  15*np.pi
 
-for istep in range(step_s,step_e+1):
-    fig = plt.figure()  
-    plt.xlim(xmin,xmax)
-    plt.ylim(ymin,ymax)
-    plt.xlabel("x axis") 
-    plt.ylabel("y axis") 
-    
+fig_height = 4.8
+fig_width = fig_height*(xmax-xmin)/(ymax-ymin) + 1.9
+fig = plt.figure(figsize=(fig_width, fig_height)) 
 
-    foutname = dirname + "/snap%05d.dat"%(istep) 
-    print("making plot ",foutname)
-    with open(foutname, 'r') as data_file:
-        line = data_file.readline();
-        attributes1 = re.findall("\d+\.\d+", line)
+plt.xlim(xmin,xmax)
+plt.ylim(ymin,ymax)
+plt.xlabel("x axis") 
+plt.ylabel("y axis") 
 
-        line = data_file.readline();
-        attributes2 = re.findall("\d+", line)
+plt.text(0.5*(xmin+xmax),ymax*1.1,r"$\mathrm{time}=%.2f$"%(time),horizontalalignment="center")
 
-    time = float(attributes1[0]) 
-    nx = int(attributes2[0])
-    ny = int(attributes2[1])
+im=plt.imshow(np.log10(data['rho']),extent=(xmin,xmax,ymin,ymax),origin="lower",vmin=-5,vmax=0)
+cbar = plt.colorbar(im,orientation="vertical")
+cbar.set_label(r"$\log_{10}\rho$")
 
-    data = np.loadtxt(foutname)
+plt.contour(x,y,Az,linestyles='solid',levels=20,colors="white")
 
-    x = data[:,0].reshape(ny,nx)
-    y = data[:,1].reshape(ny,nx)
-    den = data[:,2].reshape(ny,nx)
-    vx = data[:,3].reshape(ny,nx)
-    vy = data[:,4].reshape(ny,nx)
-    pre = data[:,5].reshape(ny,nx)
+for format_fig in ["pdf","png"]:
+    outdir = dirname + "/" + format_fig + "file"
+    os.makedirs(outdir, exist_ok=True)
 
-    plt.xlim(xmin,xmax)
-    plt.ylim(ymin,ymax)
+    outputfile = outdir + "/snap%05d."%(step) + format_fig
 
-    pg00 = plt.text(0.5*(xmin+xmax),ymax*1.1,r"$\mathrm{time}=%.2f$"%(time),horizontalalignment="center")
+    print("making plot file", outputfile)
+    plt.savefig(outputfile,bbox_inches="tight")
 
-    im=plt.imshow(np.log10(den[:,:]),extent=(xmin,xmax,ymin,ymax),origin="lower",vmin=-5,vmax=0)
-
-    if istep == step_s: 
-        plt.colorbar(im,orientation="vertical")
-
-    makedirs(dirname + "/pngfile")
-    plt.savefig(dirname + "/pngfile/pi%05d.png"%(istep),bbox_inches="tight")
-    plt.close()
-
-#plt.show()
+plt.show()
