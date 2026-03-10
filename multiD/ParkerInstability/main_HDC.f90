@@ -7,7 +7,7 @@ integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter::nx=150   ! the number of grids in the simulation box
+integer,parameter::nx=50   ! the number of grids in the simulation box
 integer,parameter::ny=nx*2 ! the number of grids in the simulation box
 integer,parameter::ngh=2         ! the number of ghost cells
 integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
