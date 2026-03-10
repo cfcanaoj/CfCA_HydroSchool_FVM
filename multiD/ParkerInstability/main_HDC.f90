@@ -1,14 +1,14 @@
 module params
 
-real(8), parameter:: timemax=60.0d0 ! simulation end time
+real(8), parameter:: timemax=60d0 ! simulation end time
 
 ! option
-integer, parameter :: flag_HDC = 0 ! 1 --> HDC on , 0 --> HDC off
+integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter::nx=300        ! the number of grids in the simulation box
-integer,parameter::ny=600 ! the number of grids in the simulation box
+integer,parameter::nx=150   ! the number of grids in the simulation box
+integer,parameter::ny=nx*2 ! the number of grids in the simulation box
 integer,parameter::ngh=2         ! the number of ghost cells
 integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
 integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
@@ -53,29 +53,29 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! output 
-character(20),parameter::dirname="nohdc" ! directory name
-!character(20),parameter::dirname="hdc_gam1.4" ! directory name
+character(20),parameter::dirname="hdc" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
-real(8), parameter:: dtsnap=2.0d0
-!logical, parameter :: flag_binary = .false.
-logical, parameter :: flag_binary = .true.
+real(8), parameter :: dtsnap   = 2.0d0
+logical, parameter :: flag_binary = .false.
 
 ! realtime analysis 
 integer, parameter :: unitevo =11
+integer, parameter :: nevo = 2
 
 end module
 
 program main
 !$ use omp_lib
-use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax 
+use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
 implicit none
 
 ! time evolution
 integer :: ntime = 0    ! counter of the timestep
 real(8) :: time = 0.0d0  ! time 
 real(8) :: dt   = 0.0d0  ! time width
+integer :: i,j,ihy  ! loop indices (for OpenMP copy etc.)
 
 ! definition of arrays 
 real(8),dimension(nxtot)::xf,xv
@@ -87,62 +87,83 @@ real(8),dimension(NVAR,nxtot,nytot) :: F
 real(8),dimension(NVAR,nxtot,nytot) :: G
 
 ! realtime analysis
-integer, parameter :: nevo = 1
 real(8) :: phys_evo(nevo)
 
 ! function 
 real(8), external :: TimestepControl
+real(8) :: t0, t1
+
+external :: makedirs, GenerateGrid, GenerateProblem
+external :: Prim2Consv, BoundaryCondition, Output
+external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
 
       ! make the directory for output
-      call makedirs(trim(dirname))
+  call makedirs(trim(dirname))
 
-      write(6,*) "setup grids and initial condition"
-      call GenerateGrid(xf, xv, yf, yv)
-      call GenerateProblem(xv, yv, yf, Q )
-      call Prim2Consv(Q, U)
-      call BoundaryCondition(yv,Q)
-      call Output( time, .TRUE., xv, yv, Q )
+  write(6,*) "setup grids and initial condition"
+  call GenerateGrid(xf, xv, yf, yv)
+  call GenerateProblem(xv, yv, yf, Q )
+!$omp parallel default(shared)
+  call Prim2Consv(Q, U)
+  call BoundaryCondition(yv,Q)
+!$omp end parallel
+  call Output( time, .TRUE., xv, yv, Q )
 
-      write(6,*) "Start the simulation"
-      open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
+
+  write(6,*) "Start the simulation"
+  open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
-      ntime = 1
-      mloop: do !ntime=1,ntimemax
-         dt = TimestepControl(xf, yf, Q)
-         if( time + dt > timemax ) dt = timemax - time
+  ntime = 1
+!  t0 = omp_get_wtime()
+  mloop: do !ntime=1,ntimemax
+    dt = TimestepControl(xf, yf, Q)
+    if( time + dt > timemax ) dt = timemax - time
 
-         Uo(:,:,:) = U(:,:,:)
+!$omp parallel default(shared)
+!$omp do collapse(2) schedule(static) private(i,j,ihy)
+    do j=1,nytot
+    do i=1,nxtot
+    do ihy=1,NVAR 
+      Uo(ihy,i,j) = U(ihy,i,j)
+    end do
+    end do
+    end do
+!$omp end do
 
-         call NumericalFlux( dt, xf, yf, Q, F, G )
-         call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Uo, U )
-         call SrcTerms( 0.5d0*dt, dt, yv, Q, U)
-         call Consv2Prim( U, Q )
-         call BoundaryCondition(yv,Q )
-!
-         call NumericalFlux( dt, xf, yf, Q, F, G )
-         call UpdateConsv( dt, xf, yf, F, G, Uo, U )
-         call SrcTerms( dt, dt, yv, Q, U)
-         call Consv2Prim( U, Q )
-         call BoundaryCondition(yv,Q )
+    call NumericalFlux( dt, xf, yf, Q, F, G )
+    call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Uo, U )
+    call SrcTerms( 0.5d0*dt, dt, yv, Q, U)
+    call Consv2Prim( U, Q )
+    call BoundaryCondition(yv, Q)
 
-         time=time+dt
-         ntime = ntime+1
-         call Output( time, .FALSE., xv, yv, Q)
+    call NumericalFlux( dt, xf, yf, Q, F, G )
+    call UpdateConsv( dt, xf, yf, F, G, Uo, U )
+    call SrcTerms( dt, dt, yv, Q, U)
+    call Consv2Prim( U, Q )
+    call BoundaryCondition(yv, Q)
+!$omp end parallel
 
-         print*, "ntime = ",ntime, "time = ",time, dt
+    time=time+dt
+    ntime = ntime+1
+    call Output( time, .FALSE., xv, yv, Q)
 
-         if( mod(ntime,10) .eq. 0 ) then
-             call RealtimeAnalysis(nevo,xv,yv,Q,phys_evo)
-             write(unitevo,*) time, phys_evo(1:nevo)
-             flush(unitevo)
-         endif
+    print*, "ntime = ",ntime, "time = ",time, dt
 
-         if(time >= timemax) exit mloop
-      enddo mloop
+    if( mod(ntime,10) .eq. 0 ) then
+      call RealtimeAnalysis(xv,yv,Q,phys_evo)
+      write(unitevo,*) time, phys_evo(1:nevo)
+    endif
 
-      close(unitevo)
+    if(time >= timemax) exit mloop
+!    if(ntime >= 1000) exit mloop
+  enddo mloop
+!  t1 = omp_get_wtime()
 
-!      call Output( time, .TRUE.,xv, yv, Q)
+!  write(*,*) "max threads =", omp_get_max_threads()
+!  write(*,'(A,F10.6,A)') "elapsed = ", (t1 - t0), " s"
+
+  close(unitevo)
+      call Output( time, .TRUE.,xv, yv, Q)
 
 !      write(6,*) "program has been finished"
 !contains
@@ -203,7 +224,7 @@ use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
 implicit none
 real(8), intent(in ) :: xv(nxtot), yv(nytot), yf(nytot)
 real(8), intent(out) :: Q(NVAR,nxtot,nytot)
-integer :: i, j
+integer::i, j
 real(8) :: pi 
 real(8) Pf(nytot)  ! gas pressure at cell surface obtained by numerical integration
 integer :: jmid = js + (je-js+1)/2
@@ -223,7 +244,6 @@ real(8) :: Pmid, pre, den
       Pmid = GasTemperature(0.0d0)
       do j=1, nytot
          Pf(j) = Pmid*exp(Pf(j))
-!         print*,yf(j), Pf(j)
       enddo
 
       do j=js-ngh,je+ngh
@@ -248,7 +268,8 @@ real(8) :: Pmid, pre, den
         real(8) function GasTemperature( y ) 
         real(8), intent(in) :: y 
 
-        GasTemperature = TL + 0.5d0*(TH - TL)*( tanh( (abs(y) - y0)/Ht ) + 1.0d0 )
+            GasTemperature = TL + 0.5d0*(TH - TL)*( tanh( (abs(y) - y0)/Ht ) + 1.0d0 )
+
         end function GasTemperature
 
 end subroutine GenerateProblem
@@ -259,67 +280,62 @@ end subroutine GenerateProblem
 !   of the primitive array Q.
 !=============================================================
 subroutine BoundaryCondition(yv,Q)
-use params, only : nxtot, nytot, NVAR, ngh, is, ie, js, je, g0, &
-                   IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, IPS, gam, TH
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
+                   IPS, NVAR, nxtot, nytot, &
+                   is, ie, js, je, g0, beta0, TH, ngh
 implicit none
 real(8), intent(in) :: yv(nytot)
 real(8), intent(inout) :: Q(NVAR,nxtot,nytot)
-integer::i,j,ihy
+integer :: i,j,ihy
 
-!$omp parallel default(none) &
-!$omp shared(Q) &
-!$omp private(i,j) 
-
-!$omp do collapse(3) schedule(static)
-      do j=1,nytot-1
-      do i=1,ngh
-      do ihy=1,NVAR
-          Q(ihy,is-i,j) = Q(ihy,ie+1-i,j)
-          Q(ihy,ie+i,j) = Q(ihy,is+i-1,j)
-      enddo
-      enddo
-      enddo
+! Fill x-direction ghost zones (periodic)
+!$omp do collapse(2) schedule(static) private(i,j,ihy)
+do j=1,nytot-1
+do i=1,ngh
+  do ihy=1,NVAR
+    Q(ihy,is-i,j) = Q(ihy,ie+1-i,j)
+    Q(ihy,ie+i,j) = Q(ihy,is+i-1,j)
+  end do
+end do
+end do
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
-      do j=1,ngh
-      do i=1,nxtot-1
-!          Q(IDN,i,js-j)  = Q(IDN,i,js-1+j)
-          Q(IDN,i,js-j)  = exp( log(Q(IDN,i,js)) &
-                                  + 0.5*g0*(yv(js-j) - yv(js))/TH)
-          Q(IVX,i,js-j)  = Q(IVX,i,js-1+j)
-          Q(IVY,i,js-j)  = -Q(IVY,i,js-1+j)
-          Q(IVZ,i,js-j)  = Q(IVZ,i,js-1+j)
-          Q(IPR,i,js-j)  = exp( log(Q(IPR,i,js)) &
-                                  + 0.5*g0*(yv(js-j) - yv(js))/TH)
-!          Q(IPR,i,js-j)  = exp( log(Q(IPR,i,js-1+j)) &
-!                                  - g0*(2*j-1)*(yf(j+1)-yf(j))/TH)
+! Fill y-direction ghost zones (periodic)
+!$omp do collapse(2) schedule(static) private(i,j,ihy)
+do j=1,ngh
+do i=1,nxtot-1
+  do ihy=1,NVAR
+     Q(IDN,i,js-j)  = exp( log(Q(IDN,i,js)) &
+                              + 0.5*g0*(yv(js-j) - yv(js))/TH)
+     Q(IVX,i,js-j)  = Q(IVX,i,js-1+j)
+     Q(IVY,i,js-j)  = -Q(IVY,i,js-1+j)
+     Q(IVZ,i,js-j)  = Q(IVZ,i,js-1+j)
+     Q(IPR,i,js-j)  = exp( log(Q(IPR,i,js)) &
+                             + 0.5*g0*(yv(js-j) - yv(js))/TH)
+     Q(IBX,i,js-j)  = sqrt(2.0*Q(IPR,i,js-j)/beta0)
+     Q(IBY,i,js-j)  = Q(IBY,i,js-1+j)
+     Q(IBZ,i,js-j)  = Q(IBZ,i,js-1+j)
+     Q(IPS,i,js-j)  = Q(IPS,i,js-1+j)
 
-          Q(IBX,i,js-j)  = sqrt(2.0*Q(IPR,i,js-j))
-          Q(IBY,i,js-j)  = Q(IBY,i,js-1+j)
-          Q(IBZ,i,js-j)  = Q(IBZ,i,js-1+j)
-          Q(IPS,i,js-j)  = Q(IPS,i,js-1+j)
-
-!          Q(IDN,i,je+j) = Q(IDN,i,je-j+1)
-          Q(IDN,i,je+j) = exp( log(Q(IDN,i,je)) &
-                                  - 0.5*g0*(yv(je+j) - yv(je))/TH)
-          Q(IVX,i,je+j) = Q(IVX,i,je-j+1)
-          Q(IVY,i,je+j) = -Q(IVY,i,je-j+1)
-          Q(IVZ,i,je+j) = Q(IVZ,i,je-j+1)
-          Q(IPR,i,je+j) = exp( log(Q(IPR,i,je)) &
-                                  - 0.5*g0*(yv(je+j) - yv(je))/TH)
-          Q(IBX,i,je+j)  = sqrt(2.0*Q(IPR,i,je+j))
-          Q(IBY,i,je+j) = Q(IBY,i,je-j+1)
-          Q(IBZ,i,je+j) = Q(IBZ,i,je-j+1)
-          Q(IPS,i,je+j) = Q(IPS,i,je-j+1)
-      enddo
-      enddo
+     Q(IDN,i,je+j) = exp( log(Q(IDN,i,je)) &
+                        - 0.5*g0*(yv(je+j) - yv(je))/TH)
+     Q(IVX,i,je+j) = Q(IVX,i,je-j+1)
+     Q(IVY,i,je+j) = -Q(IVY,i,je-j+1)
+     Q(IVZ,i,je+j) = Q(IVZ,i,je-j+1)
+     Q(IPR,i,je+j) = exp( log(Q(IPR,i,je)) &
+                        - 0.5*g0*(yv(je+j) - yv(je))/TH)
+     Q(IBX,i,je+j)  = sqrt(2.0*Q(IPR,i,je+j)/beta0)
+     Q(IBY,i,je+j) = Q(IBY,i,je-j+1)
+     Q(IBZ,i,je+j) = Q(IBZ,i,je-j+1)
+     Q(IPS,i,je+j) = Q(IPS,i,je-j+1)
+  end do
+end do
+end do
 !$omp end do
-
-!$omp end parallel
 
 return
 end subroutine BoundaryCondition
+
 !=============================================================
 ! Prim2Consv
 ! Description:
@@ -338,30 +354,29 @@ use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
 implicit none
 real(8), intent(in) :: Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: U(NVAR,nxtot,nytot)
-integer::i,j
+integer :: i,j
 
-!$omp parallel do default(none) collapse(2) schedule(static) &
-!$omp shared(U,Q) &
-!$omp private(i,j) 
-      do j=js,je
-      do i=is,ie
-          U(IDN,i,j) = Q(IDN,i,j)
-          U(IMX,i,j) = Q(IDN,i,j)*Q(IVX,i,j)
-          U(IMY,i,j) = Q(IDN,i,j)*Q(IVY,i,j)
-          U(IMZ,i,j) = Q(IDN,i,j)*Q(IVZ,i,j)
-          U(IEN,i,j) = 0.5d0*Q(IDN,i,j)*( Q(IVX,i,j)**2 + Q(IVY,i,j)**2 + Q(IVZ,i,j)**2 ) &
-                       + 0.5d0*( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 + Q(IBZ,i,j)**2 ) &
-                       + Q(IPR,i,j)/(gam - 1.0d0)
-          U(IBX,i,j) = Q(IBX,i,j)
-          U(IBY,i,j) = Q(IBY,i,j)
-          U(IBZ,i,j) = Q(IBZ,i,j)
-          U(IPS,i,j) = Q(IPS,i,j)
-      enddo
-      enddo
-!$omp end parallel do
-      
+!$omp do collapse(2) schedule(static) private(i,j)
+do j=js,je
+do i=is,ie
+  U(IDN,i,j) = Q(IDN,i,j)
+  U(IMX,i,j) = Q(IDN,i,j)*Q(IVX,i,j)
+  U(IMY,i,j) = Q(IDN,i,j)*Q(IVY,i,j)
+  U(IMZ,i,j) = Q(IDN,i,j)*Q(IVZ,i,j)
+  U(IEN,i,j) = 0.5d0*Q(IDN,i,j)*( Q(IVX,i,j)**2 + Q(IVY,i,j)**2 + Q(IVZ,i,j)**2 ) &
+             + 0.5d0*( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 + Q(IBZ,i,j)**2 ) &
+             + Q(IPR,i,j)/(gam - 1.0d0)
+  U(IBX,i,j) = Q(IBX,i,j)
+  U(IBY,i,j) = Q(IBY,i,j)
+  U(IBZ,i,j) = Q(IBZ,i,j)
+  U(IPS,i,j) = Q(IPS,i,j)
+end do
+end do
+!$omp end do
+
 return
 end subroutine Prim2Consv
+
 !=============================================================
 ! Consv2Prim
 ! Description:
@@ -380,32 +395,31 @@ use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
 implicit none
 real(8), intent(in) :: U(NVAR,nxtot,nytot)
 real(8), intent(out) :: Q(NVAR,nxtot,nytot)
-integer::i,j
-real(8) :: inv_d;
+integer :: i,j
+real(8) :: inv_d
 
-!$omp parallel do default(none) collapse(2) schedule(static) &
-!$omp shared(U,Q) &
-!$omp private(i,j,inv_d) 
-      do j=js,je
-      do i=is,ie
-           Q(IDN,i,j) = U(IDN,i,j)
-           inv_d = 1.0d0/U(IDN,i,j)
-           Q(IVX,i,j) = U(IMX,i,j)*inv_d
-           Q(IVY,i,j) = U(IMY,i,j)*inv_d
-           Q(IVZ,i,j) = U(IMZ,i,j)*inv_d
-           Q(IPR,i,j) = ( U(IEN,i,j) &
-                        - 0.5d0*(U(IMX,i,j)**2 + U(IMY,i,j)**2 + U(IMZ,i,j)**2)*inv_d  &
-                        - 0.5d0*(U(IBX,i,j)**2 + U(IBY,i,j)**2 + U(IBZ,i,j)**2) )*(gam-1.0d0)
-           Q(IBX,i,j) = U(IBX,i,j)
-           Q(IBY,i,j) = U(IBY,i,j)
-           Q(IBZ,i,j) = U(IBZ,i,j)
-           Q(IPS,i,j) = U(IPS,i,j)
-      enddo
-      enddo
-!$omp end parallel do
+!$omp do collapse(2) schedule(static) private(i,j,inv_d)
+do j=js,je
+do i=is,ie
+  Q(IDN,i,j) = U(IDN,i,j)
+  inv_d = 1.0d0/U(IDN,i,j)
+  Q(IVX,i,j) = U(IMX,i,j)*inv_d
+  Q(IVY,i,j) = U(IMY,i,j)*inv_d
+  Q(IVZ,i,j) = U(IMZ,i,j)*inv_d
+  Q(IPR,i,j) = ( U(IEN,i,j) &
+               - 0.5d0*(U(IMX,i,j)**2 + U(IMY,i,j)**2 + U(IMZ,i,j)**2)*inv_d  &
+               - 0.5d0*(U(IBX,i,j)**2 + U(IBY,i,j)**2 + U(IBZ,i,j)**2) )*(gam-1.0d0)
+  Q(IBX,i,j) = U(IBX,i,j)
+  Q(IBY,i,j) = U(IBY,i,j)
+  Q(IBZ,i,j) = U(IBZ,i,j)
+  Q(IPS,i,j) = U(IPS,i,j)
+end do
+end do
+!$omp end do
 
 return
 end subroutine Consv2Prim
+
 !!=============================================================
 ! TimestepControl
 ! Description:
@@ -488,79 +502,78 @@ real(8), intent(in) :: xf(nxtot), yf(nytot)
 real(8), intent(in) :: Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: F(NVAR,nxtot,nytot)
 real(8), intent(out) :: G(NVAR,nxtot,nytot)
+external :: vanLeer, HLL, HLLD
 
-integer::i,j
-real(8),dimension(NVAR,nxtot,nytot):: Ql,Qr
-real(8),dimension(NVAR):: flx
+integer :: i,j
+! NOTE:
+!   Ql/Qr are large work arrays. Make them SAVEd so that we do NOT create
+!   a private copy per thread when this subroutine is called inside a single
+!   long-lived OpenMP parallel region.
+real(8), save :: Ql(NVAR,nxtot,nytot), Qr(NVAR,nxtot,nytot)
+
+real(8) :: flx(NVAR)
 real(8) :: dQm(NVAR), dQp(NVAR), dQmon(NVAR)
-Real(8) :: ch
+real(8) :: ch
 
-      ch = 1.0d0*Ccfl*min( xf(is+1) - xf(is), yf(js+1) - yf(js ) )/dt
+ch = 1.0d0*Ccfl*min( xf(is+1) - xf(is), yf(js+1) - yf(js ) )/dt
 
-!$omp parallel default(none) &
-!$omp shared(Q,F,G,Ql,Qr,xf,yf,ch) &
-!$omp private(i,j,flx,dQp,dQm,dQmon)
+! ---- x-direction: reconstruction ----
+!$omp do collapse(2) schedule(static) private(i,j,flx,dQp,dQm,dQmon)
+do j=js,je
+do i=is-1,ie+1
+  dQp(1:NVAR) = Q(1:NVAR,i+1,j) - Q(1:NVAR,i  ,j)
+  dQm(1:NVAR) = Q(1:NVAR,i  ,j) - Q(1:NVAR,i-1,j)
 
-! numerical flux in the x direction
-!$omp do collapse(2) schedule(static)
-      do j=js,je
-      do i=is-1,ie+1
-         dQp(1:NVAR) = Q(1:NVAR,i+1,j) - Q(1:NVAR,i  ,j)
-         dQm(1:NVAR) = Q(1:NVAR,i  ,j) - Q(1:NVAR,i-1,j)
+  call vanLeer(NVAR, dQp, dQm, dQmon)
 
-         call vanLeer(NVAR, dQp, dQm, dQmon)
-
-         ! Ql(i,j) --> W_(i-1/2,j)
-         ! Qr(i,j) --> W_(i-1/2,j)
-         Ql(1:NVAR,i+1,j) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
-         Qr(1:NVAR,i  ,j) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
-      enddo
-      enddo
+  ! Ql(i,j) --> W_(i-1/2,j)
+  ! Qr(i,j) --> W_(i-1/2,j)
+  Ql(1:NVAR,i+1,j) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
+  Qr(1:NVAR,i  ,j) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
+end do
+end do
 !$omp end do
 
 ! ---- x-direction: Riemann solver ----
-!$omp do collapse(2) schedule(static)
-      do j=js,je
-      do i=is,ie+1 
-         if (flag_flux == 1) then 
-             call HLL (1, ch, Ql(:,i,j), Qr(:,i,j), flx) 
-         else 
-             call HLLD(1, ch, Ql(:,i,j), Qr(:,i,j), flx) 
-         end if
-         F(:,i,j) = flx(:)
-     end do
-     end do
+!$omp do collapse(2) schedule(static) private(i,j,flx)
+do j=js,je
+do i=is,ie+1
+  if (flag_flux == 1) then
+    call HLL (1, ch, Ql(:,i,j), Qr(:,i,j), flx)
+  else
+    call HLLD(1, ch, Ql(:,i,j), Qr(:,i,j), flx)
+  end if
+  F(:,i,j) = flx(:)
+end do
+end do
 !$omp end do
 
-        ! ---- y-direction: reconstruction ----
-!$omp do collapse(2) schedule(static)
-     do j=js-1,je+1
-     do i=is,ie
-           dQp(1:NVAR) = Q(1:NVAR,i,j+1) - Q(1:NVAR,i,j  )
-           dQm(1:NVAR) = Q(1:NVAR,i,j  ) - Q(1:NVAR,i,j-1)
-           call vanLeer(NVAR, dQp, dQm, dQmon)
-           Ql(1:NVAR,i,j+1) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
-           Qr(1:NVAR,i,j  ) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
-     end do
-     end do
+! ---- y-direction: reconstruction ----
+!$omp do collapse(2) schedule(static) private(i,j,flx,dQp,dQm,dQmon)
+do j=js-1,je+1
+do i=is,ie
+  dQp(1:NVAR) = Q(1:NVAR,i,j+1) - Q(1:NVAR,i,j  )
+  dQm(1:NVAR) = Q(1:NVAR,i,j  ) - Q(1:NVAR,i,j-1)
+  call vanLeer(NVAR, dQp, dQm, dQmon)
+  Ql(1:NVAR,i,j+1) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
+  Qr(1:NVAR,i,j  ) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
+end do
+end do
 !$omp end do
 
-
-  ! ---- y-direction: Riemann solver ----
-!$omp do collapse(2) schedule(static)
-    do j=js,je+1
-    do i=is,ie
-      if (flag_flux == 1) then
-        call HLL (2, ch, Ql(:,i,j), Qr(:,i,j), flx)
-      else
-        call HLLD(2, ch, Ql(:,i,j), Qr(:,i,j), flx)
-      end if
-      G(:,i,j) = flx(:)
-    end do
-    end do
+! ---- y-direction: Riemann solver ----
+!$omp do collapse(2) schedule(static) private(i,j,flx)
+do j=js,je+1
+do i=is,ie
+  if (flag_flux == 1) then
+    call HLL (2, ch, Ql(:,i,j), Qr(:,i,j), flx)
+  else
+    call HLLD(2, ch, Ql(:,i,j), Qr(:,i,j), flx)
+  end if
+  G(:,i,j) = flx(:)
+end do
+end do
 !$omp end do
-
-!$omp end parallel
 
 return
 end subroutine Numericalflux
@@ -699,7 +712,7 @@ use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
 implicit none
 integer, intent(in) :: idir
 real(8),intent(in)  :: ch
-real(8),intent(in)  :: Ql(NVAR), Qr(NVAR)
+real(8),intent(in) :: Ql(NVAR), Qr(NVAR)
 real(8),intent(out) :: flx(NVAR)
 integer :: IVpara, IVperp1, IVperp2
 integer :: IBpara, IBperp1, IBperp2
@@ -956,62 +969,58 @@ end subroutine HLLD
 !   U(:,:,:) Conservative variables updated in-place (active zone i=is:ie).
 !=============================================================
 subroutine UpdateConsv( dt1, xf, yf, F, G, Uo, U)
-use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
-                   is, ie, js, je, gam, alpha, Ccfl
+use params, only : NVAR, nxtot, nytot, is, ie, js, je
 implicit none
-real(8), intent(in) :: dt1 
+real(8), intent(in) :: dt1
 real(8), intent(in)  :: xf(nxtot), yf(nytot)
 real(8), intent(in)  :: F(NVAR,nxtot,nytot), G(NVAR,nxtot,nytot)
 real(8), intent(in)  :: Uo(NVAR,nxtot,nytot)
 real(8), intent(inout) :: U(NVAR,nxtot,nytot)
-integer::i,j,ihy
+integer :: i,j,ihy
 
-!$omp parallel do default(none) collapse(3) schedule(static) &
-!$omp shared(U,Uo,F,G,xf,yf,dt1) &
-!$omp private(i,j)
-      do j=js,je
-      do i=is,ie
-      do ihy=1,NVAR
-         U(ihy,i,j) = Uo(ihy,i,j) + dt1*(- F(ihy,i+1,j) + F(ihy,i,j))/(xf(i+1)-xf(i)) &
-                                  + dt1*(- G(ihy,i,j+1) + G(ihy,i,j))/(yf(j+1)-yf(j))
-      enddo
-      enddo
-      enddo
-!$omp end parallel do
+!$omp do collapse(2) schedule(static) private(i,j,ihy)
+do j=js,je
+do i=is,ie
+  do ihy=1,NVAR
+    U(ihy,i,j) = Uo(ihy,i,j) + dt1*(-F(ihy,i+1,j) + F(ihy,i,j))/(xf(i+1)-xf(i)) &
+                             + dt1*(-G(ihy,i,j+1) + G(ihy,i,j))/(yf(j+1)-yf(j))
+  end do
+end do
+end do
+!$omp end do
 
 return
 end subroutine UpdateConsv
+
 !-------------------------------------------------------------------
 !       Update consevative variables U using numerical flux F
 !-------------------------------------------------------------------
 subroutine SrcTerms( dt1, dt0, yv, Q, U )
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
                    IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
-                   is, ie, js, je, gam, alpha, Ccfl, g0, Hg
+                   is, ie, js, je, alpha, Ccfl, g0, Hg
 implicit none
 real(8), intent(in) :: dt1, dt0
 real(8), intent(in)  :: yv(nytot)
 real(8), intent(in)  :: Q(NVAR,nxtot,nytot)
 real(8), intent(inout) :: U(NVAR,nxtot,nytot)
 integer :: i,j
-real(8) :: src
+real(8) :: decay, src
 
-!$omp parallel do default(none) collapse(2) schedule(static) &
-!$omp shared(U,dt1,dt0) &
-!$omp private(i,j,src)
-      do j=js,je
-      do i=is,ie
-         src = -dt1*Q(IDN,i,j)*g0*tanh(yv(j)/Hg)
+! dt0 is the full-step dt, dt1 is the substep (RK) dt
+decay = dexp(-alpha*Ccfl*dt1/dt0)
 
-         U(IMY,i,j) = U(IMY,i,j) + src
-         U(IEN,i,j) = U(IEN,i,j) + src*Q(IVY,i,j)
-         U(IPS,i,j) = U(IPS,i,j)*dexp(-alpha*Ccfl*dt1/dt0)
+!$omp do collapse(2) schedule(static) private(i,j)
+do j=js,je
+do i=is,ie
+  src = -dt1*Q(IDN,i,j)*g0*tanh(yv(j)/Hg)
+  U(IMY,i,j) = U(IMY,i,j) + src
+  U(IEN,i,j) = U(IEN,i,j) + src*Q(IVY,i,j)
 
-      enddo
-      enddo
-!$omp end parallel do
-
+  U(IPS,i,j) = U(IPS,i,j)*decay
+end do
+end do
+!$omp end do
 
 end subroutine SrcTerms
 !=============================================================
@@ -1033,7 +1042,7 @@ end subroutine SrcTerms
 !=============================================================
 subroutine Output( time, flag, xv, yv, Q )
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, IPS, NVAR, & 
-                   nxtot, nytot, nx, ny, is, ie, js, je, ngh, gam, &
+                   nxtot, nytot, nx, ny, is, ie, js, je, gam, &
                    flag_binary, dirname, dtsnap, unitsnap
 implicit none
 real(8), intent(in) :: time! false --> output per dtsnap, true --> force to output
@@ -1071,7 +1080,7 @@ integer, save :: nsnap = 0
         write(unitsnap,*) "#nx, ny = ", nx, ny
           do j=js,je
           do i=is,ie
-              write(unitsnap,*) xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), &
+              write(unitsnap,'(1p,11(es24.16,1x))') xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), &
                                 Q(IPR,i,j), Q(IBX,i,j), Q(IBY,i,j), Q(IBZ,i,j) , Q(IPS,i,j)
 
           enddo
@@ -1108,7 +1117,8 @@ character(len=1024) :: cmd = ""
     end if
 
     cmd = "mkdir -p '" // trim(outdir) // "'"
-    istat = system(trim(cmd))
+!    istat = system(trim(cmd))
+    call execute_command_line(trim(cmd), exitstat=istat)
     if( istat .ne. 0 ) then
         print*, "makedirs: command failed, status=", istat
         print*, "cmd: ", trim(cmd)
@@ -1130,26 +1140,27 @@ end subroutine makedirs
 !   Q(:,:,:) Primitive variables Q=(rho, v, p)
 !   U(:,:,:) Conservative variables U=(rho, mom, E) (optional but useful)
 !=============================================================
-subroutine RealtimeAnalysis(nevo,xv,yv,Q,phys_evo)
+subroutine RealtimeAnalysis(xv,yv,Q,phys_evo)
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
                    IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
-                   is, ie, js, je, gam 
+                   is, ie, js, je, gam, nevo, nx, ny
 implicit none
-integer, intent(in)  :: nevo
 real(8), intent(in)  :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
 integer::i,j
-real(8) :: tot
+real(8) :: dby, er_divB
 
-      
-      tot = 0.0d0
+      dby = 0.0d0
+      er_divB = 0.0d0
       do j=js,je
       do i=is,ie
-!          tot = tot + Q(IVY,i,j)**2
-          tot = tot + Q(IBY,i,j)**2
+           dby = dby + Q(IBY,i,j)**2
+           er_divB = er_divB + 0.5d0*( Q(IBX,i+1,j) - Q(IBX,i-1,j) + Q(IBY,i,j+1) - Q(IBY,i,j-1) )**2 &
+                                       /( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 )
       enddo
       enddo
-      phys_evo(1:nevo) = sqrt(tot/((ie-is+1)*(je-js+1)))
+      phys_evo(1) = sqrt(dby/dble(nx*ny))
+      phys_evo(2) = sqrt(er_divB/dble(nx*ny))
       
 return
 end subroutine
