@@ -42,12 +42,12 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! output 
-character(20),parameter::dirname="hdc_noopt" ! directory name
+character(20),parameter::dirname="hdc" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
-real(8), parameter:: dtsnap=0.1d0/sqrt(5.0d0)
-logical, parameter :: flag_binary = .false.
+real(8), parameter :: dtsnap=0.1d0/sqrt(5.0d0)
+logical, parameter :: flag_binary = .true.
 
 ! realtime analysis 
 integer, parameter :: unitevo =11
