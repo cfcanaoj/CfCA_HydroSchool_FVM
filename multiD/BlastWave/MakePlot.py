@@ -2,42 +2,41 @@ import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import re
 
-def read_bindata(file):
-    with open(file, "rb") as fp: 
-        time = np.fromfile(fp, np.float64, 1).item() 
-        nx, ny, nhyd, nbc = [np.fromfile(fp, np.int32, 1).item() for _ in range(4)]
+def read_textdata(file):
+    with open(file, "r") as f:
+        time = float(f.readline().split()[-1])
+        nx, ny = map(int, f.readline().split()[-2:])
 
-        xv = np.fromfile(fp, np.float64, nx)
-        yv = np.fromfile(fp, np.float64, ny)
-        Q  = np.fromfile(fp, np.float32, nx * ny * nhyd).reshape(ny, nx, nhyd)
-        Bc = np.fromfile(fp, np.float32, nx * ny * nbc ).reshape(ny, nx, nbc)
+    arr = np.loadtxt(file).reshape(ny, nx, -1)
 
-    q_names = ['rho', 'vx', 'vy', 'vz', 'pre']
-    b_names = ['Bx', 'By', 'Bz']
+    x = arr[:, :, 0]
+    y = arr[:, :, 1]
 
-    data_dict = {name: Q[:, :, i]  for i, name in enumerate(q_names)}
-    data_dict.update({name: Bc[:, :, i] for i, name in enumerate(b_names)})
+    names = ["rho", "vx", "vy", "vz", "pre", "Bx", "By", "Bz"]
+    data_dict = {name: arr[:, :, i+2] for i, name in enumerate(names)}
 
-    return xv, yv, time, data_dict
+    return x, y, time, data_dict
 
 def vecpot(x,y,Bx,By):
     Az = np.zeros_like(By)
-    dy = y[1] - y[0]
-    dx = x[1] - x[0]
+    dy = y[1,0] - y[0,0]
+    dx = x[0,1] - x[0,0]
     
     Az[1:, 0] = Az[0, 0] + np.cumsum(0.5*(Bx[1:, 0] + Bx[:-1, 0])*dy)
     Az[:, 1:] = Az[:, [0]] - np.cumsum(0.5*(By[:, 1:] + By[:, :-1])*dx, axis=1)
     
     return Az
 
-###############################
 dirname = sys.argv[1]
 step = int(sys.argv[2])
 
-foutname = dirname + "/snap%05d.bin"%(step) 
-x, y, time, data = read_bindata(foutname)
+foutname = dirname + "/snap%05d.dat"%(step) 
+print("making plot ",foutname)
+
+x, y, time, data = read_textdata(foutname)
 Az = vecpot(x,y,data['Bx'],data['By'])
 
 xmin = -0.5
@@ -55,12 +54,12 @@ plt.xlabel("x axis")
 plt.ylabel("y axis") 
 
 plt.text(0.5*(xmin+xmax),ymax*1.1,r"$\mathrm{time}=%.2f$"%(time),horizontalalignment="center")
+
 im=plt.imshow(data['rho'],extent=(xmin,xmax,ymin,ymax),origin="lower",vmin=0,vmax=3)
 cbar = plt.colorbar(im,orientation="vertical")
 cbar.set_label("density")
 
-yy, xx = np.meshgrid(y,x,indexing="ij")
-plt.contour(xx,yy,Az,linestyles='solid',levels=20,colors="white")
+plt.contour(x,y,Az,linestyles='solid',levels=20,colors="white")
 
 for format_fig in ["pdf","png"]:
     outdir = dirname + "/" + format_fig + "file"

@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 import re
 
 def read_bindata(file):
-
-    with open(foutname, "rb") as fp: 
+    with open(file, "rb") as fp: 
         time = np.fromfile(fp, np.float64, 1).item() 
         nx, ny, nhyd, nbc = [np.fromfile(fp, np.int32, 1).item() for _ in range(4)]
 
@@ -41,19 +40,19 @@ foutname = dirname + "/snap%05d.bin"%(step)
 x, y, time, data = read_bindata(foutname)
 Az = vecpot(x,y,data['Bx'],data['By'])
 
-fig = plt.figure()  
-plt.xlim(0, 1)     
-plt.ylim(0, 1)
-plt.xlabel("x axis") 
-plt.ylabel("y axis") 
-
 xmin = -0.5
 xmax =  0.5
 ymin = -1.0
 ymax =  1.0
 
+fig_height = 4.8
+fig_width = fig_height*(xmax-xmin)/(ymax-ymin) + 1.9
+fig = plt.figure(figsize=(fig_width, fig_height)) 
+
 plt.xlim(xmin,xmax)
 plt.ylim(ymin,ymax)
+plt.xlabel("x axis") 
+plt.ylabel("y axis") 
 
 plt.text(0.5*(xmin+xmax),ymax*1.1,r"$\mathrm{time}=%.2f$"%(time),horizontalalignment="center")
 im=plt.imshow(data['sca'],extent=(xmin,xmax,ymin,ymax),origin="lower",vmin=0,vmax=1)
