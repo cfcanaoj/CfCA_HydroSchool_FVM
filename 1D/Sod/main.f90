@@ -4,7 +4,7 @@ module params
 real(8),parameter:: timemax=0.2d0 ! simulation end time
 
 ! coordinate 
-integer, parameter :: nx = 64*4       ! the number of grids in the simulation box
+integer, parameter :: nx = 64       ! the number of grids in the simulation box
 integer, parameter :: ngh = 2            ! the number of ghost cells
 integer, parameter :: nxtot = nx+2*ngh+1 ! the total number of face-centered grids including ghost cells
 integer, parameter :: is = ngh+1         ! the index of the leftmost grid
@@ -494,7 +494,7 @@ integer :: nsnap = 0
     open(unitsnap,file=filename,form='formatted',action="write")
     write(unitsnap,"(a2,f6.4)") "# ",time
     do i=is,ie
-         write(unitsnap,*) xv(i), Q(IDN,i), Q(IVX,i), Q(IPR,i)
+         write(unitsnap,'(1p,4(es24.16,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IPR,i)
     enddo
     close(unitsnap)
 
