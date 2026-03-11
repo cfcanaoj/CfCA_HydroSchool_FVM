@@ -31,13 +31,14 @@ real(8), parameter :: dtsnap=5.0d-3     ! time interval to ouput snapshots
 
 ! realtime analysis 
 integer, parameter :: unitevo = 11
+integer, parameter :: nevo = 2    ! the number of variables derived in the realtime analysis
 end module
 
 !===============================================================================
 !
 !===============================================================================
 program main
-use params, only: nxtot, NVAR, dirname, timemax, unitevo
+use params, only: nxtot, NVAR, dirname, timemax, unitevo, nevo
 implicit none
 
 ! time evolution
@@ -52,7 +53,6 @@ real(8),dimension(NVAR,nxtot) :: U ! conservative variables
 real(8),dimension(NVAR,nxtot) :: Q ! primitive variables
 real(8),dimension(NVAR,nxtot) :: F ! numerical flux
 
-integer, parameter :: nevo = 2    ! the number of variables derived in the realtime analysis
 real(8) ::  phys_evo(nevo)    ! variables derived in the realtime analysis
 
 real(8), external :: TimestepControl
@@ -83,7 +83,7 @@ real(8), external :: TimestepControl
          call Output( time, .FALSE., xv, Q )
 
          if( mod(ntime,10) .eq. 0 ) then
-            call RealtimeAnalysis(nevo,xv,Q,phys_evo)
+            call RealtimeAnalysis(xv,Q,phys_evo)
             write(unitevo,*) time, phys_evo(1:nevo)
          endif
 
@@ -519,10 +519,9 @@ end subroutine Output
 !   Q(:,:)   Primitive variables Q=(rho, v, p)
 !   U(:,:)   Conservative variables U=(rho, mom, E) (optional but useful)
 !=============================================================
-subroutine RealtimeAnalysis(nevo,xv,Q,phys_evo)
-use params, only : IDN, IVX, IPR, NVAR, is, ie, gam, nx, nxtot
+subroutine RealtimeAnalysis(xv,Q,phys_evo)
+use params, only : IDN, IVX, IPR, NVAR, is, ie, gam, nx, nxtot, nevo
 implicit none
-integer, intent(in)  :: nevo
 real(8), intent(in)  :: xv(nxtot), Q(NVAR,nxtot)
 real(8), intent(out) :: phys_evo(nevo)
 integer :: i
