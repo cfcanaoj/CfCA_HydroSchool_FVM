@@ -6,8 +6,6 @@ from matplotlib.animation import ArtistAnimation
 from matplotlib import gridspec
 import re
 
-
-
 #plt.rcParams['font.size'] = 20
 
 dirname = sys.argv[1]
@@ -61,13 +59,13 @@ for istep in range(nmin,nmax+1):
 
 
     # グラフを作成する。
-    pg00, = ax[0].plot(x, den, 'o-',c="r",label="numerical")
+    pg00, = ax[0].plot(x, den, 'o-',c="r",mfc="none",label="numerical")
     pg01, = ax[0].plot(x_ana1, den_ana, '-',c="b",label="exact")
 
-    pg10, = ax[1].plot(x, vel, 'o-',c="r",label="numerical")
+    pg10, = ax[1].plot(x, vel, 'o-',c="r",mfc="none",label="numerical")
     pg11, = ax[1].plot(x_ana1, vel_ana, '-',c="b",label="exact")
 
-    pg20, = ax[2].plot(x, pre, 'o-',c="r",label="numerical")
+    pg20, = ax[2].plot(x, pre, 'o-',c="r",mfc="none",label="numerical")
     pg21, = ax[2].plot(x_ana1, pre_ana, '-',c="b",label="exact")
 
     pg3 = ax[0].text(0,1.10,r"$\mathrm{time} = %.2f$"%(time),horizontalalignment="center")
@@ -84,6 +82,13 @@ for istep in range(nmin,nmax+1):
 ani = ArtistAnimation(fig, frames, interval=50)
 
 # mp4 画像として保存する。
-ani.save(dirname + "/animation.mp4", writer="imagemagick")
-#plt.show()
-plt.close()
+fname_anime = "animation.mp4"
+ani.save(
+    dirname + "/" + fname_anime,
+    writer="ffmpeg",
+    dpi=150,
+    codec="libx264",
+    extra_args=["-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"]
+)
+plt.show()
+#plt.close()
