@@ -27,10 +27,13 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! adiabatic index
-real(8),parameter::gam=5.0d0/3.0d0 
+real(8),parameter::gam = 5.0d0/3.0d0 
+
+! CFL number
+real(8),parameter :: cfl_number = 0.1d0
 
 ! output 
-character(20),parameter::dirname="lax" ! directory name
+character(20),parameter::dirname="hll" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
@@ -97,9 +100,10 @@ real(8), external :: TimestepControl
          if(time >= timemax) exit 
       enddo 
       call Output( time, .TRUE., xv, Q )
-      call AnalysisAfterSimu(time,xv,Q)
+!      call AnalysisAfterSimu(time,xv,Q)
 
-!      write(6,*) "program has been finished"
+      write(6,*) "program has been finished"
+
 end program main
 !=============================================================
 ! GenerateGrid
@@ -268,7 +272,8 @@ end subroutine Consv2Prim
 !            where c_s = sqrt(gam * p / rho).
 !=============================================================
 Real(8) Function TimestepControl(xf, Q) 
-use params, only : IDN, IVX, IPR, IBY, IBZ, Bx, NVAR, nxtot, is, ie, gam 
+use params, only : IDN, IVX, IPR, IBY, IBZ, Bx, NVAR, nxtot, is, ie, gam, &
+                   cfl_number
 implicit none
 real(8), intent(in) :: xf(nxtot), Q(NVAR,nxtot)
 real(8)::dtl1
@@ -286,7 +291,7 @@ integer::i
          if(dtlocal .lt. dtmin) dtmin = dtlocal
     enddo
 
-    TimestepControl = 0.1d0 * dtmin
+    TimestepControl = cfl_number*dtmin
 
 return
 end function TimestepControl
@@ -306,9 +311,9 @@ real(8), intent(in) :: dt
 real(8), intent(in) :: xv(nxtot)
 real(8), intent(in) :: Q(NVAR,nxtot)
 real(8), intent(out) :: F(NVAR,nxtot)
-real(8),dimension(NVAR,nxtot):: Ql,Qr
-real(8),dimension(NVAR):: flx
-integer::i,ihy
+real(8) :: Ql(NVAR,nxtot),Qr(NVAR,nxtot)
+real(8) :: flx(NVAR)
+integer :: i,ihy
 real(8) :: dQm, dQp, dQ
 
       do i=is-1,ie+1
@@ -329,9 +334,11 @@ real(8) :: dQm, dQp, dQ
       enddo
 
       do i=is,ie+1
-         call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx(:))
-!         call HLL(Ql(:,i),Qr(:,i),flx(:))
-         F(:,i)  = flx(:)
+!         call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx(:))
+         call HLL(Ql(:,i),Qr(:,i),flx(:))
+         do ihy=1,NVAR
+            F(ihy,i)  = flx(ihy)
+         enddo
       enddo
 
 
@@ -804,7 +811,6 @@ character(40) :: filename
 real(8), save :: tsnap = - dtsnap
 integer, save :: nsnap = 0
 
-
     if( .not.flag) then
           if( time + 1.0d-14.lt. tsnap+dtsnap) return
     endif
@@ -814,8 +820,8 @@ integer, save :: nsnap = 0
     open(unitsnap,file=filename,form='formatted',action="write")
     write(unitsnap,"(a2,f6.4)") "# ",time
     do i=is,ie
-          write(unitsnap,'(1p,9(es24.16,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IVY,i), Q(IVZ,i), Q(IPR,i), Bx, &
-          Q(IBY,i), Q(IBZ,i)
+          write(unitsnap,'(1p,9(es24.16,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IVY,i), Q(IVZ,i), & 
+                                               Q(IPR,i), Bx, Q(IBY,i), Q(IBZ,i)
     enddo
     close(unitsnap)
 
@@ -874,7 +880,11 @@ real(8) :: error
       do i=is,ie
            error = error + 1.0d0
       enddo
-      print*, nx, error
+
+      open(1,file="error.dat",action="write",position="append")
+      write(1,*) nx, error
+      print*,"nx = ",nx, "error = ",error
+      close(1)
       
 return
 end subroutine
