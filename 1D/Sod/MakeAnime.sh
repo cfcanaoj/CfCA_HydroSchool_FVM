@@ -2,9 +2,9 @@
 
 #declare -i nmin nmax
 
-dir=$1
-nmin=$2
-nmax=$3
+nmin=$1
+nmax=$2
+dir=$3
 prename=snap
 
 if [ ! -d $dir ]; then
@@ -34,7 +34,7 @@ time=system(command)
 set output outfile
 
 set title sprintf("time = %s",time) 
-plot inpfile u 1:2 ti "numerical" w lp, "sod_ana.dat" u (\$1*time/0.2):2 ti "exact solution" w l
+plot inpfile u 1:2 ti "$dir" w lp, "sod_ana.dat" u (\$1*time/0.2):2 ti "exact solution" w l
 
 set terminal pop
 EOF

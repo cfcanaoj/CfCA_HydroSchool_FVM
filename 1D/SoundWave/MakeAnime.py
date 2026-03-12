@@ -13,9 +13,9 @@ if len(sys.argv) < 4:
     print("Usage: python MakeAnime.py dirname nmin nmax [save]")
     sys.exit(1)
 
-dirname = sys.argv[1]
-nmin = int(sys.argv[2])
-nmax = int(sys.argv[3])
+nmin = int(sys.argv[1])
+nmax = int(sys.argv[2])
+dirname = sys.argv[3]
 save_png = (len(sys.argv) >= 5 and sys.argv[4].lower() == "save")
 
 fig = plt.figure(figsize=(8, 10))
@@ -30,6 +30,7 @@ for i, ax0 in enumerate(ax):
     ax0.set_ylim(-1.1 * amp, 1.1 * amp)
     ax0.set_xlim(-0.5, 0.5)
     ax0.set_ylabel(ylabel[i])
+    ax0.grid()
 
 ax[2].set_xlabel(r"$x$")
 
@@ -71,14 +72,14 @@ if save_png:
         ax[0].plot(x, den - 1.0, 'o-', c="r", mfc = "none", label="numerical")
         ax[0].plot(x, 1e-5 * np.sin(2.0 * np.pi * (x - time)), '-', c="b", label="exact")
         ax[1].plot(x, vel, 'o-', c="r", mfc = "none", label="numerical")
-        ax[1].plot(x, 1e-5 * np.sin(2.0 * np.pi * (x - time)), '-', c="b", label="exact")
+#        ax[1].plot(x, 1e-5 * np.sin(2.0 * np.pi * (x - time)), '-', c="b", label="exact")
         ax[2].plot(x, pre - 1.0 / gam, 'o-', c="r", mfc = "none", label="numerical")
-        ax[2].plot(x, 1e-5 * np.sin(2.0 * np.pi * (x - time)), '-', c="b", label="exact")
+#        ax[2].plot(x, 1e-5 * np.sin(2.0 * np.pi * (x - time)), '-', c="b", label="exact")
 
         ax[0].legend()
         ax[0].text(0.0, amp * 1.15, r"$\mathrm{time} = %.2f$" % time, horizontalalignment="center")
 
-        fname_png = os.path.join(imgdir, "snap%05d.png" % istep)
+        fname_png = os.path.join(imgdir, "snap%05d_"%(istep) + dirname + ".png")
         print("save snapshot",fname_png)
         fig.savefig(fname_png, dpi=100)
 else:
@@ -91,21 +92,22 @@ else:
         pg00, = ax[0].plot(x, den - 1.0, 'o-', c="r", mfc = "none",  label="numerical")
         pg01, = ax[0].plot(x, 1e-5 * np.sin(2.0 * np.pi * (x - time)), '-', c="b", label="exact")
         pg10, = ax[1].plot(x, vel, 'o-', c="r", mfc = "none", label="numerical")
-        pg11, = ax[1].plot(x, 1e-5 * np.sin(2.0 * np.pi * (x - time)), '-', c="b", label="exact")
+#        pg11, = ax[1].plot(x, 1e-5 * np.sin(2.0 * np.pi * (x - time)), '-', c="b", label="exact")
         pg20, = ax[2].plot(x, pre - 1.0 / gam, 'o-', c="r", mfc = "none",  label="numerical")
-        pg21, = ax[2].plot(x, 1e-5 * np.sin(2.0 * np.pi * (x - time)), '-', c="b", label="exact")
+#        pg21, = ax[2].plot(x, 1e-5 * np.sin(2.0 * np.pi * (x - time)), '-', c="b", label="exact")
 
         pg3 = ax[0].text(0, amp * 1.15, r"$\mathrm{time} = %.2f$" % time, horizontalalignment="center")
 
         if icount == 0:
             ax[0].legend()
 
-        frames.append([pg00, pg01, pg10, pg11, pg20, pg21, pg3])
+#        frames.append([pg00, pg01, pg10, pg11, pg20, pg21, pg3])
+        frames.append([pg00, pg01, pg10, pg20, pg3])
         icount += 1
 
-    ani = ArtistAnimation(fig, frames, interval=50)
+    ani = ArtistAnimation(fig, frames, interval=100)
     ani.save(
-        os.path.join(dirname, "animation.mp4"),
+        os.path.join(dirname, "animation_" + dirname + ".mp4"),
         writer="ffmpeg",
         dpi=150,
         codec="libx264",

@@ -8,12 +8,12 @@ from matplotlib.animation import ArtistAnimation
 from matplotlib import gridspec
 
 if len(sys.argv) < 4:
-    print("Usage: python MakeAnime.py dirname nmin nmax [save]")
+    print("Usage: python MakeAnime.py nmin nmax dirname [save]")
     sys.exit(1)
 
-dirname = sys.argv[1]
-nmin = int(sys.argv[2])
-nmax = int(sys.argv[3])
+nmin = int(sys.argv[1])
+nmax = int(sys.argv[2])
+dirname = sys.argv[3]
 
 save_png = (len(sys.argv) >= 5 and sys.argv[4].lower() == "save")
 
@@ -70,24 +70,20 @@ if save_png:
             a.set_ylabel(ylabel[i])
         ax[2].set_xlabel(r"$x$")
 
-        ax[0].plot(x, den, 'o-', c="r", mfc="none", label="numerical")
-        ax[0].plot(x_ana1, den_ana, '-', c="b", label="exact")
+        ax[0].plot(x, den, 'o-', c="tab:blue", mfc="none", label=dirname)
+        ax[0].plot(x_ana1, den_ana, '-', c="k", label="exact")
 
-        ax[1].plot(x, vel, 'o-', c="r", mfc="none", label="numerical")
-        ax[1].plot(x_ana1, vel_ana, '-', c="b", label="exact")
+        ax[1].plot(x, vel, 'o-', c="tab:blue", mfc="none", label=dirname)
+        ax[1].plot(x_ana1, vel_ana, '-', c="k", label="exact")
 
-        ax[2].plot(x, pre, 'o-', c="r", mfc="none", label="numerical")
-        ax[2].plot(x_ana1, pre_ana, '-', c="b", label="exact")
+        ax[2].plot(x, pre, 'o-', c="tab:blue", mfc="none", label=dirname)
+        ax[2].plot(x_ana1, pre_ana, '-', c="k", label="exact")
 
         ax[0].legend()
-        ax[0].text(
-            0.5, 1.10,
-            r"$\mathrm{time} = %.2f$" % time,
-            horizontalalignment="center",
-            transform=ax[0].transAxes
-        )
+        ax[0].text( 0.5, 1.02, r"$\mathrm{time} = %.2f$" % time, horizontalalignment="center",\
+            transform=ax[0].transAxes)
 
-        fname_png = os.path.join(imgdir, "snap%05d.png" % istep)
+        fname_png = os.path.join(imgdir, "snap%05d_"%(istep) + dirname + ".png")
         print("save snapshot",fname_png)
         fig.savefig(fname_png, dpi=100)
 
@@ -95,8 +91,8 @@ if save_png:
 # normal mode: 動画生成だけ
 # -------------------------
 else:
-    ax[0].plot([], [], 'o-', c="r", mfc="none", label="numerical")
-    ax[0].plot([], [], '-', c="b", label="exact")
+    ax[0].plot([], [], 'o-', c="tab:blue", mfc="none", label=dirname)
+    ax[0].plot([], [], '-', c="k", label="exact")
     ax[0].legend()
 
     frames = []
@@ -118,27 +114,23 @@ else:
 
         x_ana1 = np.concatenate(([-0.5], x_ana * time / tout_ana, [0.5]))
 
-        pg00, = ax[0].plot(x, den, 'o-', c="r", mfc="none")
-        pg01, = ax[0].plot(x_ana1, den_ana, '-', c="b")
+        pg00, = ax[0].plot(x, den, 'o-', c="tab:blue", mfc="none")
+        pg01, = ax[0].plot(x_ana1, den_ana, '-', c="k")
 
-        pg10, = ax[1].plot(x, vel, 'o-', c="r", mfc="none")
-        pg11, = ax[1].plot(x_ana1, vel_ana, '-', c="b")
+        pg10, = ax[1].plot(x, vel, 'o-', c="tab:blue", mfc="none")
+        pg11, = ax[1].plot(x_ana1, vel_ana, '-', c="k")
 
-        pg20, = ax[2].plot(x, pre, 'o-', c="r", mfc="none")
-        pg21, = ax[2].plot(x_ana1, pre_ana, '-', c="b")
+        pg20, = ax[2].plot(x, pre, 'o-', c="tab:blue", mfc="none")
+        pg21, = ax[2].plot(x_ana1, pre_ana, '-', c="k")
 
-        pg3 = ax[0].text(
-            0.5, 1.10,
-            r"$\mathrm{time} = %.2f$" % time,
-            horizontalalignment="center",
-            transform=ax[0].transAxes
-        )
+        pg3 = ax[0].text( 0.5, 1.02, r"$\mathrm{time} = %.2f$" % time, horizontalalignment="center",\
+            transform=ax[0].transAxes)
 
         frames.append([pg00, pg01, pg10, pg11, pg20, pg21, pg3])
 
-    ani = ArtistAnimation(fig, frames, interval=50, blit=False)
+    ani = ArtistAnimation(fig, frames, interval=100, blit=False)
 
-    fname_anime = "animation.mp4"
+    fname_anime = "animation_" + dirname + ".mp4"
     print("save animation file ",fname_anime)
     ani.save(
         os.path.join(dirname, fname_anime),

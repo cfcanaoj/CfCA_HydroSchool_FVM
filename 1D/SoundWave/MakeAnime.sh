@@ -2,9 +2,9 @@
 
 #declare -i nmin nmax
 
-dir=$1
-nmin=$2
-nmax=$3
+nmin=$1
+nmax=$2
+dir=$3
 prename=snap
 
 if [ ! -d $dir ]; then
@@ -36,7 +36,7 @@ set title sprintf("time = %s",time)
 
 pi = acos(-1.0)
 cs = 1.0
-plot inpfile u 1:(\$2-1) ti "numerical" w lp, 1e-5*sin(2.0*pi*(x-cs*time)) ti "exact solution" w l
+plot inpfile u 1:(\$2-1) ti "$dir" w lp, 1e-5*sin(2.0*pi*(x-cs*time)) ti "exact solution" w l
 
 print inpfile
 
