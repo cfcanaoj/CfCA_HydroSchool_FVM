@@ -306,9 +306,9 @@ real(8), intent(in) :: dt
 real(8), intent(in) :: xv(nxtot)
 real(8), intent(in) :: Q(NVAR,nxtot)
 real(8), intent(out) :: F(NVAR,nxtot)
-real(8),dimension(NVAR,nxtot):: Ql,Qr
-real(8),dimension(NVAR):: flx
-integer::i,ihy
+real(8) :: Ql(NVAR,nxtot),Qr(NVAR,nxtot)
+real(8) :: flx(NVAR)
+integer :: i,ihy
 real(8) :: dQm, dQp, dQ
 
       do i=is-1,ie+1
