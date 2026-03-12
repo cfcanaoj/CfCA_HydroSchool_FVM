@@ -1,7 +1,7 @@
 module params
 
 ! time
-real(8),parameter :: timemax=0.2d0 ! simulation end time
+real(8),parameter:: timemax=1.0d0 ! simulation end time
 
 ! coordinate 
 integer, parameter :: nx = 64       ! the number of grids in the simulation box
@@ -22,15 +22,12 @@ integer, parameter :: IVX = 2
 integer, parameter :: IEN = 3
 
 ! thermodynamics
-real(8),parameter :: gam=1.4d0 !! adiabatic index
-
-! CFL number
-real(8),parameter :: cfl_number = 0.3
+real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
 
 ! output 
 character(20),parameter::dirname="hll" ! directory name
 integer, parameter :: unitsnap = 17
-real(8), parameter :: dtsnap=5.0d-3    ! time interval to ouput snapshots
+real(8), parameter :: dtsnap=0.1d0     ! time interval to ouput snapshots
 
 ! realtime analysis 
 integer, parameter :: unitevo = 11
@@ -94,7 +91,7 @@ real(8), external :: TimestepControl
       enddo 
       call Output( time, .TRUE., xv, Q )
 
-!      call AnalysisAfterSimu( time, xv, Q )
+      call AnalysisAfterSimu( time, xv, Q )
 
 end program main
 !=============================================================
@@ -142,17 +139,15 @@ implicit none
 integer::i
 real(8), intent(in ) :: xv(nxtot)
 real(8), intent(out) :: Q(NVAR,nxtot)
+real(8) :: amp,pi 
+
+      pi=acos(-1.0d0)
+      amp = 1.0d-5
 
       do i=is,ie
-         if( xv(i) < 0.0d0 ) then 
-             Q(IDN,i) = 1.0d0
-             Q(IVX,i) = 0.0d0
-             Q(IPR,i) = 1.0d0
-        else 
-             Q(IDN,i) = 0.125d0
-             Q(IVX,i) = 0.0d0
-             Q(IPR,i) = 0.1d0
-         endif
+             Q(IDN,i) = 1.0d0 + amp*dsin(2.0d0*pi*xv(i))
+             Q(IVX,i) = amp*dsin(2.0d0*pi*xv(i))
+             Q(IPR,i) = 1.0d0/gam + amp*dsin(2.0d0*pi*xv(i))
       enddo
 
 return
@@ -169,16 +164,16 @@ implicit none
 real(8), intent(inout) :: Q(NVAR,nxtot)
 integer::i
 
-    do i=1,ngh 
-         Q(IDN,is-i)  = Q(IDN,is-1+i)
-         Q(IVX,is-i)  = Q(IVX,is-1+i)
-         Q(IPR,is-i)  = Q(IPR,is-1+i)
+    do i=1,ngh
+         Q(IDN,is-i)  = Q(IDN,ie+1-i)
+         Q(IVX,is-i)  = Q(IVX,ie+1-i)
+         Q(IPR,is-i)  = Q(IPR,ie+1-i)
     enddo
 
     do i=1,ngh
-         Q(IDN,ie+i) = Q(IDN,ie-i+1)
-         Q(IVX,ie+i) = Q(IVX,ie-i+1)
-         Q(IPR,ie+i) = Q(IPR,ie-i+1)
+         Q(IDN,ie+i) = Q(IDN,is+i-1)
+         Q(IVX,ie+i) = Q(IVX,is+i-1)
+         Q(IPR,ie+i) = Q(IPR,is+i-1)
     enddo
 
 return
@@ -247,7 +242,7 @@ end subroutine Consv2Prim
 !            where c_s = sqrt(gam * p / rho).
 !=============================================================
 Real(8) Function TimestepControl(xf, Q) 
-use params, only : IDN, IVX, IPR, NVAR, nxtot, is, ie, gam, cfl_number
+use params, only : IDN, IVX, IPR, NVAR, nxtot, is, ie, gam 
 implicit none
 real(8), intent(in) :: xf(nxtot), Q(NVAR,nxtot)
 real(8)::dtlocal
@@ -261,7 +256,7 @@ integer::i
          if(dtlocal .lt. dtmin) dtmin = dtlocal
     enddo
 
-    TimestepControl = cfl_number*dtmin
+    TimestepControl = 0.3d0 * dtmin
 
 return
 end function TimestepControl
@@ -554,12 +549,15 @@ implicit none
 real(8), intent(in)  :: xv(nxtot), Q(NVAR,nxtot)
 real(8), intent(in)  :: time
 integer :: i
-real(8) :: error
+real(8) :: error, denana, pi
+      pi = acos(-1.0d0)
 
       error = 0.0d0
       do i=is,ie
-           error = error + 1.0d0
+           denana = 1.0d0 + 1.0d-5*dsin(2.0d0*pi*(xv(i)-time))
+           error = error + abs( Q(IDN,i) - denana )
       enddo
+      error = error/dble(nx)
 
       open(1,file="error.dat",action="write",position="append")
       write(1,*) nx, error
