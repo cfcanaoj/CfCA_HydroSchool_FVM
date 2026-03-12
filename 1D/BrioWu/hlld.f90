@@ -2,7 +2,7 @@
 ! HLLD
 ! Description:
 !   Compute the interface flux using the HLLD approximate Riemann solver for
-!   the 1D Euler equations.
+!   the 1D MHD equations.
 !
 ! Inputs:
 !   Ql(:)  Left primitive state  (rho, v, p)
@@ -10,25 +10,26 @@
 !
 ! Output:
 !   flx(:) Conservative flux (mass, momentum, energy)
-! 
-! References
-!   Miyoshi and Kusano, J. Comput. Phys., 208, 315 (2005)
 !=============================================================
 subroutine HLLD(Ql,Qr,flx)
+use params, only : IDN, IVX, IVY, IVZ, IPR, IBY, IBZ, &
+                   IMX, IMY, IMZ, IEN, NVAR, Bx, gam
 implicit none
-real(8),intent(in)  ::Ql(:), Qr(:)
-real(8),intent(out) :: flx(:)
+real(8),intent(in)  :: Ql(NVAR), Qr(NVAR)
+real(8),intent(out) :: flx(NVAR)
 real(8):: b1
-real(8):: Ul(NFLX), Ur(NFLX)
-real(8):: Ulst(NFLX), Urst(NFLX)
-real(8):: Uldst(NFLX), Urdst(NFLX)
-real(8):: Fl(NFLX), Fr(NFLX)
+real(8):: Ul(NVAR), Ur(NVAR)
+real(8):: Ulst(NVAR), Urst(NVAR)
+real(8):: Uldst(NVAR), Urdst(NVAR)
+real(8):: Fl(NVAR), Fr(NVAR)
+real(8):: test(NVAR)
 real(8):: cfl,cfr
 real(8):: S0, S1, S2, S3, S4
 real(8):: pbl, pbr, ptotl, ptotr
 real(8) :: sqrtdl, sqrtdr, v_dot_B_stl, v_dot_B_str
 real(8) :: Ulst_d_inv, Urst_d_inv, sum_sqrtd_inv, tmp
 real(8) :: ptot_stl, ptot_str,ptot_st, Cl, Cr, Cml, Cmr, Cml_inv, Cmr_inv, bxsgn
+integer :: i, n
 
     pbl = 0.5d0*(Bx**2 + Ql(IBY)**2 + Ql(IBZ)**2)
     pbr = 0.5d0*(Bx**2 + Qr(IBY)**2 + Qr(IBZ)**2)
@@ -45,7 +46,7 @@ real(8) :: ptot_stl, ptot_str,ptot_st, Cl, Cr, Cml, Cmr, Cml_inv, Cmr_inv, bxsgn
     S0 = min( Ql(IVX) - cfl, Qr(IVX) - cfr)
     S4 = max( Ql(IVX) + cfl, Qr(IVX) + cfr)
 
-    ! conserved variables in the left and right states
+          ! conserved variables in the left and right states
     Ul(IDN) = Ql(IDN)
     Ul(IVX) = Ql(IDN)*Ql(IVX)
     Ul(IVY) = Ql(IDN)*Ql(IVY)
@@ -101,6 +102,12 @@ real(8) :: ptot_stl, ptot_str,ptot_st, Cl, Cr, Cml, Cmr, Cml_inv, Cmr_inv, bxsgn
     Urst_d_inv = 1.0d0/Urst(IDN)
     sqrtdl = dsqrt(Ulst(IDN))
     sqrtdr = dsqrt(Urst(IDN))
+
+!          if( sqrtdr .ne. sqrtdr ) then
+!              print*, "sqrtdr",sqrtdr, Cr, Cmr
+!             print*,"S", S0,S2,S4
+!              stop
+!          endif
 
     S1 = S2 - dabs(Bx)/sqrtdl
     S3 = S2 + dabs(Bx)/sqrtdr
@@ -195,6 +202,10 @@ real(8) :: ptot_stl, ptot_str,ptot_st, Cl, Cr, Cml, Cmr, Cml_inv, Cmr_inv, bxsgn
        Uldst(IEN) = Ulst(IEN) - sqrtdl*bxsgn*(v_dot_B_stl - tmp)
        Urdst(IEN) = Urst(IEN) + sqrtdr*bxsgn*(v_dot_B_str - tmp)
    endif
+
+!         test = (S4 - S3)*Urst + (S3 - S2)*Urdst + (S2 - S1)*Uldst + (S1 - S0)*Ulst - S4*Ur + S0*Ul + Fr - Fl
+!         print*,test(IVperp2)
+         
 
     !--- Step 6.  Compute flux
     if( S0 >= 0.0d0 ) then
