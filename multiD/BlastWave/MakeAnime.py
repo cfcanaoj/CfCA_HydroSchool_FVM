@@ -49,13 +49,9 @@ def read_data(filetype, dirname, step):
     else:
         raise ValueError("filetype should be ascii or binary")
 
-    data_dict["Bpre"] = 0.5 * (
-        data_dict["Bx"]**2 + data_dict["By"]**2 + data_dict["Bz"]**2
-    )
-    data_dict["Ekin"] = 0.5 * (
-        data_dict["vx"]**2 + data_dict["vy"]**2 + data_dict["vz"]**2
-    )
-    data_dict["beta"] = data_dict["pre"] / data_dict["Bpre"]
+    data_dict["Bpre"] = 0.5*(data_dict["Bx"]**2 + data_dict["By"]**2 + data_dict["Bz"]**2)
+    data_dict["Ekin"] = 0.5*data_dict['rho']*(data_dict["vx"]**2 + data_dict["vy"]**2 + data_dict["vz"]**2)
+    data_dict["beta"] = data_dict["pre"]/data_dict["Bpre"]
 
     return x, y, time, data_dict
 
@@ -120,41 +116,49 @@ def collect_sampled_values(filetype, step_s, step_e, dirnames, varname):
 
     return np.concatenate(vals_list)
 
-
-parser = argparse.ArgumentParser()
-parser.add_argument("filetype", choices=["ascii", "binary"])
-parser.add_argument("step_s", type=int)
-parser.add_argument("step_e", type=int)
-parser.add_argument("varname", type=str)
-parser.add_argument("scale_type", choices=["linear", "log"])
-parser.add_argument("dirnames", nargs="+")
-parser.add_argument("--vmin", type=float, default=None)
-parser.add_argument("--vmax", type=float, default=None)
-parser.add_argument("--interval", type=int, default=200)
+parser = argparse.ArgumentParser(
+    description="Create a comparison movie from multiple simulation outputs.",
+    usage="python3 MakeAnime.py [ascii|binary] [step_s] [step_e] [varname] [linear|log] [dir1] [dir2] ... [-h] [--vmin VMIN] [--vmax VMAX] [--interval INTERVAL]",
+    epilog=(
+        "Example:\n"
+        "  python3 MakeAnime.py ascii 0 20 rho linear ct hdc\n"
+        "  python3 MakeAnime.py binary 10 50 beta log ct hdc --vmin 1e-2 --vmax 1e2"
+    ),
+    formatter_class=argparse.RawTextHelpFormatter
+)
+parser.add_argument("filetype", choices=["ascii", "binary"],help="input file format")
+parser.add_argument("step_s", type=int, help="starting step number")
+parser.add_argument("step_e", type=int, help="ending step number")
+parser.add_argument("varname", type=str, help="variable to plot (rho, vx, vy, vz, P, Bx, By, Bz, Bpre, Ekin, beta)")
+parser.add_argument("scale_type", choices=["linear", "log"], help="color scale type")
+parser.add_argument("dirnames", nargs="+", help="one or more directories containing snapshot files")
+parser.add_argument("--vmin", type=float, default=None, help="(optional) manual minimum value for the color scale")
+parser.add_argument("--vmax", type=float, default=None, help="(optional) manual maximum value for the color scale")
+parser.add_argument("--interval", type=int, default=200, help="(optional) frame interval in milliseconds")
 args = parser.parse_args()
 
-filetype   = args.filetype
-step_s     = args.step_s
-step_e     = args.step_e
-varname    = args.varname
-scale_type = args.scale_type
-dirnames   = args.dirnames
+filetype    = args.filetype
+step_s      = args.step_s
+step_e      = args.step_e
+varname     = args.varname
+scale_type  = args.scale_type
+dirnames    = args.dirnames
 vmin_manual = args.vmin
 vmax_manual = args.vmax
 interval    = args.interval
 
 varlabel_dict = {
-    "rho":  r"$\rho$",
-    "vx":   r"$v_x$",
-    "vy":   r"$v_y$",
-    "vz":   r"$v_z$",
-    "pre":  r"$P$",
-    "Bx":   r"$B_x$",
-    "By":   r"$B_y$",
-    "Bz":   r"$B_z$",
-    "Bpre": r"$B^2/2$",
-    "Ekin": r"$v^2/2$",
-    "beta": r"$\beta$",
+    "rho":  "density",
+    "vx":   "velocity x",
+    "vy":   "velocity y",
+    "vz":   "velocity z",
+    "pre":  "gas pressure",
+    "Bx":   "magnetic field x",
+    "By":   "magnetic field y",
+    "Bz":   "magnetic field z",
+    "Bpre": "magnetic pressure",
+    "Ekin": "kinetic energy",
+    "beta": "plasma beta",
 }
 
 

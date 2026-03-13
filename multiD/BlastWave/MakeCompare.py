@@ -108,36 +108,31 @@ def vecpot(x, y, Bx, By):
 
     return Az
 
-
-if len(sys.argv) < 5:
-    print("Usage:")
-    print("  python3 MakePlot.py ascii  20 rho ct hdc")
-    print("  python3 MakePlot.py binary 20 Bx  ct hdc run3")
-    sys.exit(1)
-
-if len(sys.argv) < 6:
-    print("Usage:")
-    print("  python3 MakeCompare.py ascii  20 rho linear ct hdc")
-    print("  python3 MakeCompare.py binary 20 Bx  log    ct hdc run3")
-    sys.exit(1)
-
 parser = argparse.ArgumentParser()
-
-parser.add_argument("filetype", choices=["ascii", "binary"])
-parser.add_argument("step", type=int)
-parser.add_argument("varname", type=str)
-parser.add_argument("scale_type", choices=["linear", "log"])
-parser.add_argument("dirnames", nargs="+")
-parser.add_argument("--vmin", type=float, default=None)
-parser.add_argument("--vmax", type=float, default=None)
-
+parser = argparse.ArgumentParser(
+    description="Create a comparison shapshot from multiple simulation outputs.",
+    usage="python3 MakeCompare.py [ascii|binary] [step] [varname] [linear|log] [dir1] [dir2] ... [-h] [--vmin VMIN] [--vmax VMAX]"
+    epilog=(
+        "Example:\n"
+        "  python3 MakeCompare.py ascii 20 rho linear ct hdc\n"
+        "  python3 MakeCompare.py binary 50 beta log ct hdc --vmin 1e-2 --vmax 1e2"
+    ),
+    formatter_class=argparse.RawTextHelpFormatter
+)
+parser.add_argument("filetype", choices=["ascii", "binary"],help="input file format")
+parser.add_argument("step", type=int, help="step number")
+parser.add_argument("varname", type=str, help="variable to plot (rho, vx, vy, vz, P, Bx, By, Bz, Bpre, Ekin, beta)")
+parser.add_argument("scale_type", choices=["linear", "log"], help="color scale type")
+parser.add_argument("dirnames", nargs="+", help="one or more directories containing snapshot files")
+parser.add_argument("--vmin", type=float, default=None, help="(optional) manual minimum value for the color scale")
+parser.add_argument("--vmax", type=float, default=None, help="(optional) manual maximum value for the color scale")
 args = parser.parse_args()
 
-filetype = args.filetype
-step = args.step
-varname = args.varname
+filetype   = args.filetype
+step       = args.step
+varname    = args.varname
 scale_type = args.scale_type
-dirnames = args.dirnames
+dirnames   = args.dirnames
 vmin_manual = args.vmin
 vmax_manual = args.vmax
 
