@@ -6,13 +6,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import ArtistAnimation
 from matplotlib import gridspec
+import argparse
 
 if len(sys.argv) < 4:
-    print("Usage: python MakeAnime.py nmin nmax dirname [save]")
+    print("Usage: python MakeAnime.py step_s step_e dirname [save]")
     sys.exit(1)
 
-nmin = int(sys.argv[1])
-nmax = int(sys.argv[2])
+step_s = int(sys.argv[1])
+step_e = int(sys.argv[2])
 dirname = sys.argv[3]
 
 save_png = (len(sys.argv) >= 5 and sys.argv[4].lower() == "save")
@@ -44,7 +45,7 @@ if save_png:
     imgdir = os.path.join(dirname, "pngfile")
     os.makedirs(imgdir, exist_ok=True)
 
-    for istep in range(nmin, nmax + 1):
+    for istep in range(step_s, step_e + 1):
         foutname = os.path.join(dirname, "snap%05d.dat" % istep)
         print("reading " + foutname)
 
@@ -97,7 +98,7 @@ else:
 
     frames = []
 
-    for istep in range(nmin, nmax + 1):
+    for istep in range(step_s, step_e + 1):
         foutname = os.path.join(dirname, "snap%05d.dat" % istep)
         print("reading " + foutname)
 
