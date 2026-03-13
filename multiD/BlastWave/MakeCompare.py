@@ -108,7 +108,6 @@ def vecpot(x, y, Bx, By):
 
     return Az
 
-parser = argparse.ArgumentParser()
 parser = argparse.ArgumentParser(
     description="Create a comparison shapshot from multiple simulation outputs.",
     usage="python3 MakeCompare.py [ascii|binary] [step] [varname] [linear|log] [dir1] [dir2] ... [-h] [--vmin VMIN] [--vmax VMAX]"
