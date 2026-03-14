@@ -196,7 +196,7 @@ fig = plt.figure(figsize=(fig_width, fig_height))
 grid = ImageGrid(
     fig, 111,
     nrows_ncols=(1, npanel),
-    axes_pad=0.15,
+    axes_pad=0.40,
     share_all=True,
     cbar_location="right",
     cbar_mode="single",
@@ -248,7 +248,7 @@ for istep in range(step_s, step_e + 1):
 ani = animation.ArtistAnimation(fig, graph_list, interval=interval)
 
 if len(dirnames) > 1:
-    joined = "_vs_".join(os.path.basename(os.path.normpath(d)) for d in dirnames)
+    joined = "_".join(os.path.basename(os.path.normpath(d)) for d in dirnames)
 else:
     joined = os.path.basename(os.path.normpath(dirnames[0]))
 
