@@ -23,7 +23,7 @@ def read_data(filetype, dirname, step):
         x = arr[0, :, 0]
         y = arr[:, 0, 1]
 
-        names = ["rho", "vx", "vy", "vz", "pre", "Bx", "By", "Bz"]
+        names = ["rho", "vx", "vy", "vz", "pre", "sca", "Bx", "By", "Bz"]
         data_dict = {name: arr[:, :, i + 2] for i, name in enumerate(names)}
 
     elif filetype == "binary":
@@ -39,7 +39,7 @@ def read_data(filetype, dirname, step):
             Q = np.fromfile(fp, np.float32, nx*ny*nhyd).reshape(ny, nx, nhyd)
             Bc = np.fromfile(fp, np.float32, nx*ny*nbc).reshape(ny, nx, nbc)
 
-        q_names = ["rho", "vx", "vy", "vz", "pre"]
+        q_names = ['rho', 'vx', 'vy', 'vz', 'pre', 'sca']
         b_names = ["Bx", "By", "Bz"]
 
         data_dict = {name: Q[:, :, i] for i, name in enumerate(q_names)}
@@ -120,7 +120,7 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("filetype", choices=["ascii", "binary"],help="input file format")
 parser.add_argument("step", type=int, help="step number")
-parser.add_argument("varname", type=str, help="variable to plot (rho, vx, vy, vz, P, Bx, By, Bz, Bpre, Ekin, beta)")
+parser.add_argument("varname", type=str, help="variable to plot (rho, vx, vy, vz, P, sca, Bx, By, Bz, Bpre, Ekin, beta)")
 parser.add_argument("scale_type", choices=["linear", "log"], help="color scale type")
 parser.add_argument("dirnames", nargs="+", help="one or more directories containing snapshot files")
 parser.add_argument("--vmin", type=float, default=None, help="(optional) manual minimum value for the color scale")
@@ -141,6 +141,7 @@ varlabel_dict = {
     "vy":   "velocity y",
     "vz":   "velocity z",
     "pre":  "gas pressure",
+    "sca":  "scalar field",
     "Bx":   "magnetic field x",
     "By":   "magnetic field y",
     "Bz":   "magnetic field z",
@@ -200,7 +201,7 @@ fig = plt.figure(figsize=(fig_width, fig_height))
 grid = ImageGrid(
     fig, 111,
     nrows_ncols=(1, npanel),
-    axes_pad=0.3,
+    axes_pad=0.30,
     share_all=True,
     cbar_location="right",
     cbar_mode="single",

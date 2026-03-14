@@ -200,7 +200,7 @@ fig = plt.figure(figsize=(fig_width, fig_height))
 grid = ImageGrid(
     fig, 111,
     nrows_ncols=(1, npanel),
-    axes_pad=0.3,
+    axes_pad=0.40,
     share_all=True,
     cbar_location="right",
     cbar_mode="single",
