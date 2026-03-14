@@ -94,25 +94,29 @@ end program
 !   quantities. The number of faces is (number of cells + 1).
 !=============================================================
 subroutine GenerateGrid(xf, xv, yf, yv)
-use params, only : nxtot, nytot, ngh, nx, ny, xmax, xmin, ymax, ymin
-implicit none
-real(8), intent(out) :: xf(nxtot), xv(nxtot)
-real(8), intent(out) :: yf(nytot), yv(nytot)
-real(8) :: dx,dy
-integer::i,j
+  use params, only : nxtot, nytot, ngh, nx, ny, xmax, xmin, ymax, ymin
+  use mpimod
+  implicit none
+  real(8), intent(out) :: xf(nxtot), xv(nxtot)
+  real(8), intent(out) :: yf(nytot), yv(nytot)
+  real(8) :: dx,dy
+  real(8) :: xminl,yminl
+  integer::i,j
 
-
-      dx=(xmax-xmin)/dble(nx)
+  
+  dx=(xmax-xmin)/dble(nx*ntiles(1))
+  xminl = xmin + (xmax-xmin)/dble(ntiles(1))*coords(1)
       do i=1,nxtot
-         xf(i) = dx*(i-(ngh+1))+xmin
+         xf(i) = dx*(i-(ngh+1))+xminl
       enddo
       do i=1,nxtot-1
          xv(i) = 0.5d0*(xf(i+1)+xf(i))
       enddo
 
-      dy=(ymax-ymin)/dble(ny)
+      dy=(ymax-ymin)/dble(ny*ntiles(2))
+      yminl = ymin + (ymax-ymin)/dble(ntiles(2))*coords(2)
       do j=1,nytot
-         yf(j) = dy*(j-(ngh+1))+ymin
+         yf(j) = dy*(j-(ngh+1))+yminl
       enddo
       do j=1,nytot-1
          yv(j) = 0.5d0*(yf(j+1)+yf(j))
