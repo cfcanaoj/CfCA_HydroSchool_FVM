@@ -1,6 +1,7 @@
 program main
   use omp_lib
-use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
+  use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
+  use mpimod
 implicit none
 
 ! time evolution
@@ -24,6 +25,9 @@ real(8) :: phys_evo(nevo)
  logical,parameter:: benchmarkmode=.true.
       ! make the directory for output
       call makedirs(trim(dirname))
+ 
+      call InitializeMPI
+      
 !$acc data create(dt,xf,xv,yf,yv, Uo, U, Q, F,G)
       write(6,*) "setup grids and initial condition"
       call GenerateGrid(xf, xv, yf, yv)

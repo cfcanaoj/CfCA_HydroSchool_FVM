@@ -133,11 +133,12 @@ real(8), intent(in) :: xf(nxtot), yf(nytot), Q(NVAR,nxtot,nytot)
 real(8), intent(inout) :: dt 
 real(8)::dtl1
 real(8)::dtl2
-real(8)::dtmin,cf,dtming
+real(8)::dtmin,cf
+real(8):: dtminl,dtming
 integer::i,j
 
       dtmin=1.0d90
-!$acc data present(xf,yf,Q,dt)
+!$acc data present(xf,yf,Q,dt) create(dtmin,dtminl,dtming)
 !$acc kernels      
 !$acc loop collapse(2) private(dtl1,dtl2,cf) reduction(min:dtmin)
       do j=js,je
@@ -148,10 +149,13 @@ integer::i,j
          dtmin = min(dtl1,dtl2,dtmin)
       enddo
       enddo
-!$acc end kernels
+!$acc end kernels      
+!$acc serial      
+      dtminl =dtmin
+!$acc end serial
       
-!$acc host_data use_device(dtmin,dtming)
-       call MPI_ALLREDUCE( dtmin, dtming, 1 &
+!$acc host_data use_device(dtminl,dtming)
+       call MPI_ALLREDUCE( dtminl, dtming, 1 &
      &                   , MPI_DOUBLE_PRECISION   &
      &                   , MPI_MIN, comm3d, ierr)
 !$acc end host_data

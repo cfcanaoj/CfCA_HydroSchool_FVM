@@ -31,7 +31,7 @@ main.o: main.f90 boundary.o config.o
 objs = config.o mpi_setup.o mhd.o boundary.o main.o
 
 ${exe}: ${objs}
-	${fc} ${fopt} ${foptopenacc} ${objs} -o ${exe}
+	${fc} ${fopt} ${foptopenacc} ${objs} -o $@
 
 #################
 # clean up
