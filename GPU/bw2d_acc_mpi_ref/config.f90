@@ -7,8 +7,8 @@ integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter::nxtotal=1280 ! the number of grids in the simulation box
-integer,parameter::nytotal=1280 ! the number of grids in the simulation box
+integer,parameter::nxtotal=512 ! the number of grids in the simulation box
+integer,parameter::nytotal=512 ! the number of grids in the simulation box
 
 integer,parameter::nxdiv=2 ! the number of grids in the simulation box
 integer,parameter::nydiv=1 ! the number of grids in the simulation box

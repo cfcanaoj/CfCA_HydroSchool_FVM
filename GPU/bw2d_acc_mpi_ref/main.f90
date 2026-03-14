@@ -36,7 +36,7 @@ real(8) :: phys_evo(nevo)
       call BoundaryCondition(Q)
       call Output( time, .TRUE., xv, yv, Q )
 
-      write(6,*) "Start the simulation"
+      print *, "Simulation has started."
       open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
       ntime = 1
@@ -77,7 +77,7 @@ real(8) :: phys_evo(nevo)
       close(unitevo)
       call Output( time, .TRUE.,xv, yv, Q)
 !$acc end data
-!      write(6,*) "program has been finished"
+      print *, "Simulation has finished."
 !contains
 end program
 !=============================================================

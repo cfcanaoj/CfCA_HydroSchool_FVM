@@ -137,9 +137,9 @@ real(8)::dtmin,cf
 real(8):: dtminl,dtming
 integer::i,j
 
-      dtmin=1.0d90
 !$acc data present(xf,yf,Q,dt) create(dtmin,dtminl,dtming)
 !$acc kernels      
+      dtmin=1.0d90
 !$acc loop collapse(2) private(dtl1,dtl2,cf) reduction(min:dtmin)
       do j=js,je
       do i=is,ie
