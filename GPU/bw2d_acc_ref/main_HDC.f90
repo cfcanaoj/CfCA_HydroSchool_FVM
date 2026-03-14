@@ -7,8 +7,8 @@ integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter::nx=128        ! the number of grids in the simulation box
-integer,parameter::ny=128 ! the number of grids in the simulation box
+integer,parameter::nx=512 ! the number of grids in the simulation box
+integer,parameter::ny=512 ! the number of grids in the simulation box
 integer,parameter::ngh=2         ! the number of ghost cells
 integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
 integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
@@ -91,7 +91,7 @@ real(8) :: phys_evo(nevo)
       call BoundaryCondition(Q)
       call Output( time, .TRUE., xv, yv, Q )
 
-      write(6,*) "Start the simulation"
+      print *,"Simulation has started."
       open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
       ntime = 1
@@ -132,7 +132,7 @@ real(8) :: phys_evo(nevo)
       close(unitevo)
       call Output( time, .TRUE.,xv, yv, Q)
 !$acc end data
-!      write(6,*) "program has been finished"
+      print *, "Simulation has finished"
 !contains
 end program
 !=============================================================

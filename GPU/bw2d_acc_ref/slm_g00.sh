@@ -10,6 +10,6 @@
 # squeue
 
 module purge
-module load nvhpc
+module load nvhpc/25.7
 
 ./bw.x
