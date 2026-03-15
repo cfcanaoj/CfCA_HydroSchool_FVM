@@ -9,7 +9,7 @@ integer, parameter :: ngh = 2            ! the number of ghost cells
 integer, parameter :: nxtot = nx+2*ngh+1 ! the total number of face-centered grids including ghost cells
 integer, parameter :: is = ngh+1         ! the index of the leftmost grid
 integer, parameter :: ie = nx+ngh     ! the index of the rightmost grid
-real(8), parameter :: x1min = -0.5d0, x1max = 0.5d0
+real(8), parameter :: xmin = -0.5d0, xmax = 0.5d0
 
 ! indices of the primitive variables
 integer, parameter :: IDN = 1
@@ -105,22 +105,22 @@ end program main
 !   This routine fills:
 !     - xf(:): face (cell-boundary) coordinates
 !     - xv(:): cell-center coordinates
-!   The grid uses global parameters (x1min, x1max, nx, ngh, ...).
+!   The grid uses global parameters (xmin, xmax, nx, ngh, ...).
 !
 ! Notes:
 !   Be careful about array sizes when mixing cell-centered and face-centered
 !   quantities. The number of faces is (number of cells + 1).
 !=============================================================
 subroutine GenerateGrid(xf, xv)
-use params, only : x1min, x1max, nxtot, ngh, nx
+use params, only : xmin, xmax, nxtot, ngh, nx
 implicit none
 real(8), intent(out) :: xf(nxtot), xv(nxtot)
 real(8) :: dx
 integer::i
 
-    dx=(x1max-x1min)/nx
+    dx=(xmax-xmin)/nx
     do i=1,nxtot
-         xf(i) = dx*(i-(ngh+1))+x1min
+         xf(i) = dx*(i-(ngh+1))+xmin
     enddo
     do i=1,nxtot-1
          xv(i) = 0.5d0*(xf(i+1)+xf(i))
