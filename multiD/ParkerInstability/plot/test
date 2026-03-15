@@ -1,0 +1,8 @@
+# # Matsumoto+2019 Parker dispersion (half-domain y>=0, B-parity, node-count tracking)
+# # columns: kx(=kxH0)   sigma_real(selected)   nodes(vy)   sigma_imag(selected)
+# # params: g0=1.47, Hg=5.0, T0=1.0, T1=25.0, y0=10.0, Ht=0.5, beta0=10, gamma=1.05, N=201, y_max=47.12388980384689
+# # midplane parity (B-family): vx(0)=0, p1(0)=0, rho1(0)=0, vy'(0)=0, a'(0)=0
+# # top BC: neumann
+# # tracking: nodes_target=0, imag_tol=1e-07, vy_rel_thresh=1e-06
+# 
+2.6666666667e-01 2.0279619593e-02 0.0000000000e+00 -3.9622416525e-11
