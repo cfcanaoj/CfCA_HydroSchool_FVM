@@ -492,7 +492,7 @@ integer :: nsnap = 0
     open(unitsnap,file=filename,form='formatted',action="write")
     write(unitsnap,"(a2,f6.4)") "# ",time
     do i=is,ie
-         write(unitsnap,'(1p,4(es24.16,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IPR,i)
+         write(unitsnap,'(1p,4(es24.16e3,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IPR,i)
     enddo
     close(unitsnap)
 
