@@ -1,23 +1,37 @@
 # -*- coding: utf-8 -*-
 import os
 import re
-import sys
+import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.animation import ArtistAnimation
 from matplotlib import gridspec
-import argparse
 
-if len(sys.argv) < 4:
-    print("Usage: python MakeAnime.py step_s step_e dirname [save]")
-    sys.exit(1)
+# =========================================================
+# argument
+# =========================================================
+parser = argparse.ArgumentParser(
+    description="Create an animation comparing snapshots from multiple directories.",
+    usage="python3 MakeAnime.py [step_s] [step_e] [dir1] [dir2] ...",
+    epilog=(
+        "Example:\n"
+        "  python3 MakeAnime.py 0 40 lax\n"
+        "  python3 MakeAnime.py 0 40 lax hll\n"
+    ),
+    formatter_class=argparse.RawTextHelpFormatter
+)
+parser.add_argument("step_s", type=int, help="start step")
+parser.add_argument("step_e", type=int, help="end step")
+parser.add_argument("dirnames", nargs="+", help="one or more directories containing snapshot files")
+args = parser.parse_args()
 
-step_s = int(sys.argv[1])
-step_e = int(sys.argv[2])
-dirname = sys.argv[3]
+step_s   = args.step_s
+step_e   = args.step_e
+dirnames = args.dirnames
 
-save_png = (len(sys.argv) >= 5 and sys.argv[4].lower() == "save")
-
+# =========================================================
+# figure
+# =========================================================
 fig = plt.figure(figsize=(8, 10))
 gs = gridspec.GridSpec(3, 1, wspace=0.30, hspace=0.2)
 ax = [plt.subplot(gs[i]) for i in range(3)]
@@ -30,6 +44,9 @@ for i, ax0 in enumerate(ax):
 
 ax[2].set_xlabel(r"$x$")
 
+# =========================================================
+# exact solution
+# =========================================================
 anasol = np.loadtxt("sod_ana.dat")
 tout_ana = 0.2
 x_ana = anasol[:, 0]
@@ -38,108 +55,113 @@ den_ana = np.concatenate(([anasol[0, 1]], anasol[:, 1], [anasol[-1, 1]]))
 vel_ana = np.concatenate(([anasol[0, 2]], anasol[:, 2], [anasol[-1, 2]]))
 pre_ana = np.concatenate(([anasol[0, 3]], anasol[:, 3], [anasol[-1, 3]]))
 
-# -------------------------
-# save mode: PNG保存だけ
-# -------------------------
-if save_png:
-    imgdir = os.path.join(dirname, "pngfile")
-    os.makedirs(imgdir, exist_ok=True)
+colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
-    for istep in range(step_s, step_e + 1):
-        foutname = os.path.join(dirname, "snap%05d.dat" % istep)
-        print("reading " + foutname)
+# =========================================================
+# utility
+# =========================================================
+def read_snapshot(dirname, istep):
+    foutname = os.path.join(dirname, "snap%05d.dat" % istep)
+    print("reading " + foutname)
 
-        with open(foutname, 'r') as data_file:
-            line = data_file.readline()
-            attributes = re.search(r'#\s*(\S+)', line)
-        time = float(attributes.group(1))
+    with open(foutname, "r") as data_file:
+        line = data_file.readline()
+        attributes = re.search(r'#\s*(\S+)', line)
 
-        data = np.loadtxt(foutname)
-        x = data[:, 0]
-        den = data[:, 1]
-        vel = data[:, 2]
-        pre = data[:, 3]
+    if attributes is None:
+        raise ValueError(f"Could not read time from header: {foutname}")
 
-        x_ana1 = np.concatenate(([-0.5], x_ana * time / tout_ana, [0.5]))
+    time = float(attributes.group(1))
 
-        for a in ax:
-            a.cla()
-            a.minorticks_on()
-            a.set_xlim(-0.5, 0.5)
+    data = np.loadtxt(foutname)
+    x   = data[:, 0]
+    den = data[:, 1]
+    vel = data[:, 2]
+    pre = data[:, 3]
 
-        for i, a in enumerate(ax):
-            a.set_ylabel(ylabel[i])
-        ax[2].set_xlabel(r"$x$")
+    return time, x, den, vel, pre
 
-        ax[0].plot(x, den, 'o-', c="tab:blue", mfc="none", label=dirname)
-        ax[0].plot(x_ana1, den_ana, '-', c="k", label="exact")
 
-        ax[1].plot(x, vel, 'o-', c="tab:blue", mfc="none", label=dirname)
-        ax[1].plot(x_ana1, vel_ana, '-', c="k", label="exact")
+def make_outroot(dirnames):
+    if len(dirnames) > 1:
+        outroot = "compare"
+        for dirname in dirnames:
+            outroot += "_" + os.path.basename(os.path.normpath(dirname))
+    else:
+        outroot = os.path.basename(os.path.normpath(dirnames[0]))
+    return outroot
 
-        ax[2].plot(x, pre, 'o-', c="tab:blue", mfc="none", label=dirname)
-        ax[2].plot(x_ana1, pre_ana, '-', c="k", label="exact")
 
-        ax[0].legend()
-        ax[0].text( 0.5, 1.02, r"$\mathrm{time} = %.2f$" % time, horizontalalignment="center",\
-            transform=ax[0].transAxes)
+# =========================================================
+# animation
+# =========================================================
+frames = []
 
-        fname_png = os.path.join(imgdir, "snap%05d_"%(istep) + dirname + ".png")
-        print("save snapshot",fname_png)
-        fig.savefig(fname_png, dpi=100)
+for istep in range(step_s, step_e + 1):
+    artists = []
+    time_ref = None
 
-# -------------------------
-# normal mode: 動画生成だけ
-# -------------------------
-else:
-    ax[0].plot([], [], 'o-', c="tab:blue", mfc="none", label=dirname)
-    ax[0].plot([], [], '-', c="k", label="exact")
-    ax[0].legend()
+    for idir, dirname in enumerate(dirnames):
+        time, x, den, vel, pre = read_snapshot(dirname, istep)
 
-    frames = []
+        if time_ref is None:
+            time_ref = time
+            x_ana1 = np.concatenate(([-0.5], x_ana * time_ref / tout_ana, [0.5]))
 
-    for istep in range(step_s, step_e + 1):
-        foutname = os.path.join(dirname, "snap%05d.dat" % istep)
-        print("reading " + foutname)
+            pg01, = ax[0].plot(x_ana1, den_ana, '-', c="k", lw=1.5)
+            pg11, = ax[1].plot(x_ana1, vel_ana, '-', c="k", lw=1.5)
+            pg21, = ax[2].plot(x_ana1, pre_ana, '-', c="k", lw=1.5)
+            artists.extend([pg01, pg11, pg21])
 
-        with open(foutname, 'r') as data_file:
-            line = data_file.readline()
-            attributes = re.search(r'#\s*(\S+)', line)
-        time = float(attributes.group(1))
+        color = colors[idir % len(colors)]
 
-        data = np.loadtxt(foutname)
-        x = data[:, 0]
-        den = data[:, 1]
-        vel = data[:, 2]
-        pre = data[:, 3]
+        pg00, = ax[0].plot(x, den, 'o-', c=color, mfc="none")
+        pg10, = ax[1].plot(x, vel, 'o-', c=color, mfc="none")
+        pg20, = ax[2].plot(x, pre, 'o-', c=color, mfc="none")
+        artists.extend([pg00, pg10, pg20])
 
-        x_ana1 = np.concatenate(([-0.5], x_ana * time / tout_ana, [0.5]))
+    if istep == step_s:
+        handles = []
+        labels = []
 
-        pg00, = ax[0].plot(x, den, 'o-', c="tab:blue", mfc="none")
-        pg01, = ax[0].plot(x_ana1, den_ana, '-', c="k")
+        h_exact, = ax[0].plot([], [], '-', c='k', lw=1.5)
+        handles.append(h_exact)
+        labels.append("exact")
 
-        pg10, = ax[1].plot(x, vel, 'o-', c="tab:blue", mfc="none")
-        pg11, = ax[1].plot(x_ana1, vel_ana, '-', c="k")
+        for idir, dirname in enumerate(dirnames):
+            color = colors[idir % len(colors)]
+            label = os.path.basename(os.path.normpath(dirname))
+            h, = ax[0].plot([], [], 'o-', c=color, mfc="none")
+            handles.append(h)
+            labels.append(label)
 
-        pg20, = ax[2].plot(x, pre, 'o-', c="tab:blue", mfc="none")
-        pg21, = ax[2].plot(x_ana1, pre_ana, '-', c="k")
+        ax[0].legend(handles, labels, fontsize=9)
 
-        pg3 = ax[0].text( 0.5, 1.02, r"$\mathrm{time} = %.2f$" % time, horizontalalignment="center",\
-            transform=ax[0].transAxes)
-
-        frames.append([pg00, pg01, pg10, pg11, pg20, pg21, pg3])
-
-    ani = ArtistAnimation(fig, frames, interval=100, blit=False)
-
-    fname_anime = "animation_" + dirname + ".mp4"
-    print("save animation file ",fname_anime)
-    ani.save(
-        os.path.join(dirname, fname_anime),
-        writer="ffmpeg",
-        dpi=150,
-        codec="libx264",
-        extra_args=["-pix_fmt", "yuv420p",
-                    "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"]
+    pg3 = ax[0].text(
+        0.5, 1.02,
+        r"$\mathrm{time} = %.2f$" % time_ref,
+        horizontalalignment="center",
+        transform=ax[0].transAxes
     )
-    plt.show()
+    artists.append(pg3)
 
+    frames.append(artists)
+
+ani = ArtistAnimation(fig, frames, interval=100, blit=False)
+
+outroot = make_outroot(dirnames)
+fname_anime = "animation_%s.mp4" % outroot
+print("save animation file", fname_anime)
+
+ani.save(
+    fname_anime,
+    writer="ffmpeg",
+    dpi=150,
+    codec="libx264",
+    extra_args=[
+        "-pix_fmt", "yuv420p",
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+    ]
+)
+
+plt.show()
