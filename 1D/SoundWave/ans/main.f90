@@ -24,6 +24,9 @@ integer, parameter :: IEN = 3
 ! thermodynamics
 real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
 
+! CFL number
+real(8),parameter :: cfl_number = 0.3
+
 ! output 
 character(20),parameter::dirname="hll" ! directory name
 integer, parameter :: unitsnap = 17
@@ -134,7 +137,7 @@ end subroutine GenerateGrid
 !   Ghost zones are filled later by BoundaryCondition().
 !=============================================================
 subroutine GenerateProblem(xv, Q)
-use params, only: IDN, IVX, IPR, NVAR, is, ie, nxtot, gam
+use params, only: IDN, IVX, IPR, NVAR, is, ie, nxtot, gam, xmin, xmax
 implicit none
 integer::i
 real(8), intent(in ) :: xv(nxtot)
@@ -256,7 +259,7 @@ integer::i
          if(dtlocal .lt. dtmin) dtmin = dtlocal
     enddo
 
-    TimestepControl = 0.3d0 * dtmin
+    TimestepControl = cfl_number*dtmin
 
 return
 end function TimestepControl
