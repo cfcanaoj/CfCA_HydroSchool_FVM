@@ -270,4 +270,4 @@ ani.save(
     ]
 )
 
-#plt.show()
+plt.show()
