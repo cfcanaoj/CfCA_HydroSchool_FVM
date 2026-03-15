@@ -4,7 +4,7 @@
 #SBATCH -o ./out%j.log
 #SBATCH -e ./err%j.log
 
-# usage sbatch sj_ori.sh
+# usage sbatch slm_g00.sh
 # other useful commands
 # sinfo
 # squeue
@@ -12,5 +12,4 @@
 module purge
 module load nvhpc/25.7
 
-# original program
-./kh.x
+./bw.x
