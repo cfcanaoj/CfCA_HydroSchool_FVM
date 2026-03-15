@@ -8,7 +8,7 @@ all: ${exe}
 
 fc= mpif90
 #foptopenacc = -Minfo=accel -acc
-foptopenacc = -Minfo=accel -acc -gpu=managed
+foptopenacc = -Minfo=accel -acc -gpu=mem:separate
 fopt = -g -traceback -O2
 #fopt=-g -traceback -check all -fpe0
 

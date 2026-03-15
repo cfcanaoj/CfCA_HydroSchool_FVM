@@ -22,7 +22,7 @@ real(8),dimension(NVAR,nxtot,nytot) :: G
 real(8) :: phys_evo(nevo)
 
  real(8)::time_begin,time_end
- logical,parameter:: benchmarkmode=.true.
+ logical,parameter:: benchmarkmode=.false.
       ! make the directory for output
       call makedirs(trim(dirname))
  
