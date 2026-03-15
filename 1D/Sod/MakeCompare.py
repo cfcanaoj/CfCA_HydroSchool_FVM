@@ -9,7 +9,7 @@ import argparse
 
 parser = argparse.ArgumentParser(
     description="Create a comparison shapshot from multiple simulation outputs.",
-    usage="python3 MakeCompare.py [step] [linear|log] [dir1] [dir2]",
+    usage="python3 MakeCompare.py [step] [dir1] [dir2]",
     epilog=(
         "Example:\n"
         "  python3 MakeCompare.py 20 lax\n"
