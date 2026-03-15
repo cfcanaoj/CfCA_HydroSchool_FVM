@@ -42,7 +42,7 @@ real(4),dimension(6:Nvar,is:ie,js:je) :: Qoutmhd
     endif
 !$acc update host(Q)
     xout(is:ie) = xv(is:ie)
-    yout(is:ie) = yv(is:ie)
+    yout(js:je) = yv(js:je)
     Qouthyd(1:5,is:ie,js:je) = real(Q(1:5,is:ie,js:je)) ! single precision
     Qoutmhd(6:Nvar,is:ie,js:je) = real(Q(6:Nvar,is:ie,js:je))! single precision
     write(filename,'((i2.2)(a1)(i5.5))') myid,"-",nsnap
