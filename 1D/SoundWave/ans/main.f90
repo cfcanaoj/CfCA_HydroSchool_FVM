@@ -68,6 +68,7 @@ real(8), external :: TimestepControl
       call GenerateGrid(xf, xv)
       call GenerateProblem(xv, Q)
       call Prim2Consv(Q, U)
+      call BoundaryCondition(Q)
       call Output( time, .TRUE., xv, Q )
 
       write(6,*) "Start the simulation"
@@ -245,7 +246,7 @@ end subroutine Consv2Prim
 !            where c_s = sqrt(gam * p / rho).
 !=============================================================
 Real(8) Function TimestepControl(xf, Q) 
-use params, only : IDN, IVX, IPR, NVAR, nxtot, is, ie, gam 
+use params, only : IDN, IVX, IPR, NVAR, nxtot, is, ie, gam, cfl_number
 implicit none
 real(8), intent(in) :: xf(nxtot), Q(NVAR,nxtot)
 real(8)::dtlocal
