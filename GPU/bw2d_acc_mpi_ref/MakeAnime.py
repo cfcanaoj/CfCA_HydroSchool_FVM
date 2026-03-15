@@ -9,6 +9,20 @@ import matplotlib.animation as animation
 from mpl_toolkits.axes_grid1 import ImageGrid
 from matplotlib.colors import Normalize, LogNorm
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+
+def resolve_dir(dirname):
+    path = Path(dirname)
+    if path.exists():
+        return path
+
+    alt = SCRIPT_DIR / dirname
+    if alt.exists():
+        return alt
+
+    raise FileNotFoundError(path)
+
 
 def _assemble_blocks(blocks, step):
     x_starts = sorted({block[1][0] for block in blocks})
@@ -49,7 +63,7 @@ def _assemble_blocks(blocks, step):
 
 
 def read_data(filetype, dirname, step):
-    directory = Path(dirname)
+    directory = resolve_dir(dirname)
 
     if filetype == "ascii":
         paths = sorted(directory.glob(f"snap*-{step:05d}.dat"))
@@ -59,13 +73,21 @@ def read_data(filetype, dirname, step):
                 raise FileNotFoundError(single)
             paths = [single]
 
-        print("reading", f"{dirname}/snap*-{step:05d}.dat")
+        print("reading", str(directory / f"snap*-{step:05d}.dat"))
         blocks = []
         for path in paths:
             with path.open("r", encoding="ascii") as fp:
                 time = float(fp.readline().split()[-1])
                 nx, ny = map(int, fp.readline().split()[-2:])
-            arr = np.loadtxt(path, comments="#").reshape(ny, nx, -1)
+                body = fp.read()
+            arr = np.fromstring(body, sep=" ")
+            ncols = 11
+            expected = nx * ny * ncols
+            if arr.size != expected:
+                raise ValueError(
+                    f"unexpected number of values in {path}: expected {expected}, got {arr.size}"
+                )
+            arr = arr.reshape(ny, nx, ncols)
             blocks.append((time, arr[0, :, 0], arr[:, 0, 1], arr[:, :, 2:]))
 
         x, y, time, fields = _assemble_blocks(blocks, step)
@@ -80,7 +102,7 @@ def read_data(filetype, dirname, step):
                 raise FileNotFoundError(single)
             paths = [single]
 
-        print("reading", f"{dirname}/snap*-{step:05d}.bin")
+        print("reading", str(directory / f"snap*-{step:05d}.bin"))
         blocks = []
         for path in paths:
             with path.open("rb") as fp:
@@ -283,18 +305,21 @@ if len(dirnames) > 1:
 else:
     joined = os.path.basename(os.path.normpath(dirnames[0]))
 
-fname_anime = f"{varname}_snap{step_s:05d}_{step_e:05d}_{joined}.mp4"
 outdir = "mp4file"
 os.makedirs(outdir, exist_ok=True)
-outfile = os.path.join(outdir, fname_anime)
+if animation.writers.is_available("ffmpeg"):
+    fname_anime = f"{varname}_snap{step_s:05d}_{step_e:05d}_{joined}.mp4"
+    outfile = os.path.join(outdir, fname_anime)
+    writer = animation.FFMpegWriter(
+        codec="libx264",
+        extra_args=["-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"],
+    )
+else:
+    fname_anime = f"{varname}_snap{step_s:05d}_{step_e:05d}_{joined}.gif"
+    outfile = os.path.join(outdir, fname_anime)
+    writer = animation.PillowWriter()
 
 print("making animation file", outfile)
-ani.save(
-    outfile,
-    writer="ffmpeg",
-    dpi=150,
-    codec="libx264",
-    extra_args=["-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"],
-)
+ani.save(outfile, writer=writer, dpi=150)
 
 plt.show()
