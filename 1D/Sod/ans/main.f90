@@ -1,7 +1,7 @@
 module params
 
 ! time
-real(8),parameter:: timemax=0.2d0 ! simulation end time
+real(8),parameter :: timemax=0.2d0 ! simulation end time
 
 ! coordinate 
 integer, parameter :: nx = 64       ! the number of grids in the simulation box
@@ -22,12 +22,15 @@ integer, parameter :: IVX = 2
 integer, parameter :: IEN = 3
 
 ! thermodynamics
-real(8),parameter::gam=1.4d0 !! adiabatic index
+real(8),parameter :: gam=1.4d0 !! adiabatic index
+
+! CFL number
+real(8),parameter :: cfl_number = 0.3
 
 ! output 
-character(20),parameter::dirname="lax" ! directory name
+character(20),parameter::dirname="hll" ! directory name
 integer, parameter :: unitsnap = 17
-real(8), parameter :: dtsnap=5.0d-3     ! time interval to ouput snapshots
+real(8), parameter :: dtsnap=5.0d-3    ! time interval to ouput snapshots
 
 ! realtime analysis 
 integer, parameter :: unitevo = 11
@@ -91,7 +94,7 @@ real(8), external :: TimestepControl
       enddo 
       call Output( time, .TRUE., xv, Q )
 
-      call AnalysisAfterSimu( time, xv, Q )
+!      call AnalysisAfterSimu( time, xv, Q )
 
 end program main
 !=============================================================
@@ -134,7 +137,7 @@ end subroutine GenerateGrid
 !   Ghost zones are filled later by BoundaryCondition().
 !=============================================================
 subroutine GenerateProblem(xv, Q)
-use params, only: IDN, IVX, IPR, NVAR, is, ie, nxtot
+use params, only: IDN, IVX, IPR, NVAR, is, ie, nxtot, gam
 implicit none
 integer::i
 real(8), intent(in ) :: xv(nxtot)
@@ -244,7 +247,7 @@ end subroutine Consv2Prim
 !            where c_s = sqrt(gam * p / rho).
 !=============================================================
 Real(8) Function TimestepControl(xf, Q) 
-use params, only : IDN, IVX, IPR, NVAR, nxtot, is, ie, gam 
+use params, only : IDN, IVX, IPR, NVAR, nxtot, is, ie, gam, cfl_number
 implicit none
 real(8), intent(in) :: xf(nxtot), Q(NVAR,nxtot)
 real(8)::dtlocal
@@ -258,7 +261,7 @@ integer::i
          if(dtlocal .lt. dtmin) dtmin = dtlocal
     enddo
 
-    TimestepControl = 0.3d0 * dtmin
+    TimestepControl = cfl_number*dtmin
 
 return
 end function TimestepControl
@@ -290,8 +293,8 @@ real(8),dimension(NVAR):: flx
     enddo
 
     do i=is,ie+1
-       call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx)
-!       call HLL(Ql(:,i),Qr(:,i),flx)
+!       call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx)
+       call HLL(Ql(:,i),Qr(:,i),flx)
        do ihy=1,NVAR 
            F(ihy,i)  = flx(ihy)
        enddo
@@ -513,11 +516,9 @@ end subroutine Output
 !   monitor the run without generating heavy I/O.
 !
 ! Inputs:
-!   time     Current simulation time
 !   step     Current step index
 !   xv(:)    Cell-center coordinates
 !   Q(:,:)   Primitive variables Q=(rho, v, p)
-!   U(:,:)   Conservative variables U=(rho, mom, E) (optional but useful)
 !=============================================================
 subroutine RealtimeAnalysis(xv,Q,phys_evo)
 use params, only : IDN, IVX, IPR, NVAR, is, ie, gam, nx, nxtot, nevo
@@ -544,10 +545,8 @@ end subroutine
 !   summary diagnostics and/or derived outputs.
 !
 ! Inputs:
-!   dirname  Output directory name where snapshots/logs are stored
 !   xv(:)    Cell-center coordinates
 !   Q(:,:)   Final primitive variables Q=(rho, v, p)
-!   U(:,:)   Final conservative variables U=(rho, mom, E)
 !=============================================================
 subroutine AnalysisAfterSimu(time,xv,Q)
 use params, only : IDN, IVX, IPR, NVAR, is, ie, gam, nx, nxtot
@@ -555,15 +554,18 @@ implicit none
 real(8), intent(in)  :: xv(nxtot), Q(NVAR,nxtot)
 real(8), intent(in)  :: time
 integer :: i
-real(8) :: tot
+real(8) :: error
 
-      tot = 0.0d0
+      error = 0.0d0
       do i=is,ie
-           tot = tot + 1.0d0
+           error = error + 1.0d0
       enddo
 
-!      print*, "nx = ",nx, "tot = ", tot
-      
+      open(1,file="error.dat",action="write",position="append")
+      write(1,*) nx, error
+      print*,"nx = ",nx, "error = ",error
+      close(1)
+
 return
 end subroutine
 !=============================================================
@@ -595,4 +597,3 @@ character(len=1024) :: cmd = ""
     endif
 
 end subroutine makedirs
-
