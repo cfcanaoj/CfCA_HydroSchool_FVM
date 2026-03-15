@@ -1017,7 +1017,7 @@ integer, save :: nsnap = 0
         write(unitsnap,*) "#nx, ny = ", nx, ny
           do j=js,je
           do i=is,ie
-              write(unitsnap,'(1p,11(es24.16,1x))') xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), &
+              write(unitsnap,'(1p,11(es24.16e3,1x))') xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), &
                                 Q(IPR,i,j), Q(IBX,i,j), Q(IBY,i,j), Q(IBZ,i,j) , Q(IPS,i,j)
 
           enddo

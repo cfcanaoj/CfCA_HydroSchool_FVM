@@ -44,7 +44,7 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! output 
-character(20),parameter::dirname="hdc_new" ! directory name
+character(20),parameter::dirname="hdc" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
@@ -225,7 +225,8 @@ real(8) :: pi, den, B0, rho1, rho2, dv, wid, sig
     dv   = 2.00d0
     wid  = 0.05d0
     sig  = 0.2d0
-    B0  = dsqrt(2.0d0/3.0d0)
+!    B0  = dsqrt(2.0d0/3.0d0)
+    B0  = 1.0d0
 
     do j=js,je
     do i=is,ie
@@ -1036,7 +1037,7 @@ integer, save :: nsnap = 0
         write(unitsnap,*) "#nx, ny = ", nx, ny
           do j=js,je
           do i=is,ie
-              write(unitsnap,'(1p,12(es24.16,1x))') xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), &
+              write(unitsnap,'(1p,12(es24.16e3,1x))') xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), &
                                 Q(IPR,i,j), Q(ISC,i,j), Q(IBX,i,j), Q(IBY,i,j), Q(IBZ,i,j) , Q(IPS,i,j)
           enddo
           enddo
