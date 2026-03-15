@@ -25,10 +25,13 @@ mhd.o: mhd.f90 mpi_setup.o config.o
 boundary.o: boundary.f90 mhd.o mpi_setup.o config.o
 	${fc} ${fopt} ${foptopenacc} $< -c $@
 
-main.o: main.f90 boundary.o config.o
+output.o: output.f90 mhd.o mpi_setup.o config.o
 	${fc} ${fopt} ${foptopenacc} $< -c $@
 
-objs = config.o mpi_setup.o mhd.o boundary.o main.o
+main.o: main.f90 output.o boundary.o config.o
+	${fc} ${fopt} ${foptopenacc} $< -c $@
+
+objs = config.o mpi_setup.o mhd.o boundary.o output.o main.o
 
 ${exe}: ${objs}
 	${fc} ${fopt} ${foptopenacc} ${objs} -o $@
