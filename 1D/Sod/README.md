@@ -1,6 +1,5 @@
 # Sod Shock Tube Test
 
-
 ## Description
 
 ## Setup
@@ -19,8 +18,17 @@ $$
 
 * RealtimeAnim.plt
 
-`gnuplot RealtimeAnim.plt`
+`gnuplot -c RealtimeAnim.plt ibeg ifin dirname`
 
 * MakeAnime.sh
 
+`./MakeAnime.sh ibeg ifin dirname`
+
+
 * MakeAnim.py
+
+Usage: python MakeAnime.py [step_s] [step_e] [dir1] [dir2] ... 
+
+* MakeCompare.py
+
+usage: python3 MakeCompare.py [step] [dir1] [dir2] ...
