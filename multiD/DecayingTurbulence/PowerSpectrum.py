@@ -1,148 +1,263 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-import re
+import argparse
 
-def PowerSpectrum( Ax, Ay, kwave, kbins ):
-    Axk = np.fft.fft2( Ax )/(nx)
-    Ayk = np.fft.fft2( Ay )/(ny)
 
-    Ekink = 0.5*( np.abs(Axk)**2 + np.abs(Ayk)**2 )
+def read_data(filetype, dirname, step):
+    fileroot = os.path.join(dirname, f"snap{step:05d}")
 
-    print("normalization ",np.sum(np.abs(Axk)**2 + np.abs(Ayk)**2)/np.sum(Ax**2 + Ay**2))
-    print(np.sum(np.abs(Axk)**2 + np.abs(Ayk)**2))
+    if filetype == "ascii":
+        file = fileroot + ".dat"
+        print("reading", file)
 
-    index = np.digitize(kwave.flat, kbins)
+        with open(file, "r") as f:
+            time = float(f.readline().split()[-1])
+            nx, ny = map(int, f.readline().split()[-2:])
 
-    N = len(kbins)
+        arr = np.loadtxt(file, comments="#").reshape(ny, nx, -1)
 
-    Epower = np.zeros(N-1)
-    for n in range(1,N):
-        Epower[n-1] = np.sum( Ekink.flat[index == n] )
+        x = arr[0, :, 0]
+        y = arr[:, 0, 1]
+
+        names = ["rho", "vx", "vy", "vz", "pre", "Bx", "By", "Bz", "vorticity", "Az"]
+        data_dict = {name: arr[:, :, i + 2] for i, name in enumerate(names)}
+
+    elif filetype == "binary":
+        file = fileroot + ".bin"
+        print("reading", file)
+
+        with open(file, "rb") as fp:
+            time = np.fromfile(fp, np.float64, 1)[0]
+            nx   = np.fromfile(fp, np.int32, 1)[0]
+            ny   = np.fromfile(fp, np.int32, 1)[0]
+            nhyd = np.fromfile(fp, np.int32, 1)[0]
+            nbc  = np.fromfile(fp, np.int32, 1)[0]
+
+            x = np.fromfile(fp, np.float64, nx)
+            y = np.fromfile(fp, np.float64, ny)
+            Q = np.fromfile(fp, np.float32, nx * ny * nhyd).reshape(ny, nx, nhyd)
+            Bc = np.fromfile(fp, np.float32, nx * ny * nbc).reshape(ny, nx, nbc)
+            vor = np.fromfile(fp, np.float32, nx * ny).reshape(ny, nx)
+            Az  = np.fromfile(fp, np.float32, nx * ny).reshape(ny, nx)
+
+
+        q_names = ["rho", "vx", "vy", "vz", "pre"]
+        b_names = ["Bx", "By", "Bz"]
+
+        data_dict = {name: Q[:, :, i] for i, name in enumerate(q_names)}
+        data_dict.update({name: Bc[:, :, i] for i, name in enumerate(b_names)})
+        data_dict["vorticity"] = vor
+        data_dict["Az"] = Az - np.mean(Az)
+
+    else:
+        raise ValueError("filetype should be 'ascii' or 'binary'")
+
+    return x, y, time, data_dict
+
+
+def get_uniform_spacing(coord):
+    d = np.diff(coord)
+    d0 = d[0]
+    if not np.allclose(d, d0, rtol=1e-10, atol=1e-12):
+        raise ValueError("Grid is not uniform. This script assumes uniform spacing.")
+    return d0
+
+
+def make_kgrid(x, y):
+    nx = x.size
+    ny = y.size
+
+    dx = get_uniform_spacing(x)
+    dy = get_uniform_spacing(y)
+
+    # cycles per unit length
+    kx = np.fft.fftfreq(nx, d=dx)
+    ky = np.fft.fftfreq(ny, d=dy)
+
+    kx2d, ky2d = np.meshgrid(kx, ky, indexing="xy")
+    kmag = np.sqrt(kx2d**2 + ky2d**2)
+
+    return kx, ky, kx2d, ky2d, kmag, dx, dy
+
+
+def shell_integrate(P2d, kmag, kbins):
+    index = np.digitize(kmag.ravel(), kbins)
+    Epower = np.zeros(len(kbins) - 1)
+
+    flat = P2d.ravel()
+    for n in range(1, len(kbins)):
+        mask = (index == n)
+        Epower[n - 1] = np.sum(flat[mask])
 
     return Epower
 
 
-fig = plt.figure()  
-#plt.xlim(0, 1)     
-#plt.ylim(0, 1)
-plt.xlabel(r"$k/(2\pi)$") 
-plt.ylabel("power spectrum") 
+def fft2_norm(A):
+    ny, nx = A.shape
+    return np.fft.fft2(A) / (nx * ny)
 
-xmin = -0.5
-xmax =  0.5
-ymin = -0.5
-ymax =  0.5
 
-dirname = "hlld"
+def compute_spectrum(specname, data, kx2d, ky2d, kmag, kbins):
+    if specname == "enstrophy":
+        omegak = fft2_norm(data["vorticity"])
+        P2d = 0.5 * np.abs(omegak)**2
+        Epower = shell_integrate(P2d, kmag, kbins)
 
-step_s = 50
-step_e = 50
+    elif specname == "kinene":
+        vxk = fft2_norm(data["vx"])
+        vyk = fft2_norm(data["vy"])
+        P2d = 0.5 * (np.abs(vxk)**2 + np.abs(vyk)**2)
+        Epower = shell_integrate(P2d, kmag, kbins)
 
-for istep in range(step_s,step_e+1):
-    foutname = dirname + "/snap%05d.dat"%(istep)
-    print("making plot ",foutname)
-    with open(foutname, 'r') as data_file:
-        line = data_file.readline();
-        attributes1 = re.findall("\d+\.\d+", line)
+    elif specname == "magene":
+        Bxk = fft2_norm(data["Bx"])
+        Byk = fft2_norm(data["By"])
+        P2d = 0.5 * (np.abs(Bxk)**2 + np.abs(Byk)**2)
+        Epower = shell_integrate(P2d, kmag, kbins)
 
-        line = data_file.readline();
-        attributes2 = re.findall("\d+", line)
+    elif specname == "totene":
+        vxk = fft2_norm(data["vx"])
+        vyk = fft2_norm(data["vy"])
+        Bxk = fft2_norm(data["Bx"])
+        Byk = fft2_norm(data["By"])
+        P2d = 0.5 * (np.abs(vxk)**2 + np.abs(vyk)**2 + np.abs(Bxk)**2 + np.abs(Byk)**2)
+        Epower = shell_integrate(P2d, kmag, kbins)
 
-    time = float(attributes1[0]) 
-    nx = int(attributes2[0])
-    ny = int(attributes2[1])
+    elif specname == "crosshelicity":
+        vxk = fft2_norm(data["vx"])
+        vyk = fft2_norm(data["vy"])
+        Bxk = fft2_norm(data["Bx"])
+        Byk = fft2_norm(data["By"])
+        P2d = np.real(vxk * np.conjugate(Bxk) + vyk * np.conjugate(Byk))
+        Epower = shell_integrate(P2d, kmag, kbins)
 
-    data = np.loadtxt(foutname)
-    print("nx = ",nx)
-    print("ny = ",ny)
+    elif specname == "magpot":
+        # mean-square magnetic potential spectrum
+        Azk = fft2_norm(data["Az"])
+        P2d = 0.5 * np.abs(Azk)**2
+        Epower = shell_integrate(P2d, kmag, kbins)
 
-    x = data[:,0].reshape(ny,nx)
-    y = data[:,1].reshape(ny,nx)
-    vx = data[:,3].reshape(ny,nx) 
-    vy = data[:,4].reshape(ny,nx)
-    vz = data[:,5].reshape(ny,nx)
-    pre = data[:,6].reshape(ny,nx)
-    bx = data[:,7].reshape(ny,nx) 
-    by = data[:,8].reshape(ny,nx)
-    bz = data[:,9].reshape(ny,nx)
-    vor = data[:,10].reshape(ny,nx)
-    Bpot = data[:,11].reshape(ny,nx)
+    else:
+        raise KeyError(
+            f"Unknown spectrum type: {specname}. "
+            f"Available: enstrophy, kinene, magene, totene, crosshelicity, magpot"
+        )
 
-    kx = np.fft.fftfreq(nx)*nx/(xmax - xmin)
-    ky = np.fft.fftfreq(ny)*ny/(ymax - ymin)
-    kx2d, ky2d = np.meshgrid( kx, ky, indexing='ij')
-    kwave = np.sqrt(kx2d**2 + ky2d**2)
+    return Epower
 
-    kmin = np.min(1.0/(xmax - xmin))
-    kmax = np.min(0.5*nx/(xmax - xmin))
 
-    kbins = np.arange(kmin,kmax,kmin)
-    N = len(kbins)
-    kbinc = 0.5*( kbins[1:] + kbins[:-1] )
+parser = argparse.ArgumentParser(
+    description="Compare multiple spectrum types in each panel, one panel per directory.",
+    usage="python3 PowerSpectrum_new2.py [ascii|binary] [step] [spec1] [spec2] ... --dirs [dir1] [dir2] ... [-h]",
+    epilog=(
+        "Example:\n"
+        "  python3 PowerSpectrum_new2.py ascii 20 kinene magene totene --dirs ct hdc\n"
+    ),
+    formatter_class=argparse.RawTextHelpFormatter
+)
+parser.add_argument("filetype", choices=["ascii", "binary"], help="input file format")
+parser.add_argument("step", type=int, help="step number")
+parser.add_argument(
+    "specnames",
+    nargs="+",
+    help=("spectrum types to plot "
+          "(enstrophy, kinene, magene, totene, crosshelicity, magpot)")
+)
+parser.add_argument("--dirs", nargs="+", required=True,
+                    help="directories containing snapshot files")
+args = parser.parse_args()
 
-    Epower = PowerSpectrum( vx, vy, kwave, kbins )
+filetype = args.filetype
+step = args.step
+specnames = args.specnames
+dirnames = args.dirs
 
-    print(np.sum(Epower)*2)
+speclabel_dict = {
+    "enstrophy": r"enstrophy$/k^2$",
+    "kinene": "kinetic energy",
+    "magene": "magnetic energy",
+    "totene": "total energy",
+    "crosshelicity": "cross helicity",
+    "magpot": r"magnetic potential$/\Delta x^2$",
+}
 
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.plot(kbinc,Epower,'o-')
-    i0 = np.where(kbinc > 10)[0][0]
-    plt.plot(kbinc,Epower[i0]*2.0*(kbinc/10)**(-5.0/3.0),'-')
-    plt.plot(kbinc,Epower[i0]*2.0*(kbinc/10)**(-3.0),'-')
+ndir = len(dirnames)
 
-for i in range(N-1):
-    print(kbinc[i], Epower[i])
+fig, axes = plt.subplots(
+    1, ndir,
+    figsize=(5.5 * ndir, 4.8),
+    squeeze=False,
+    sharex=True,
+    sharey=True
+)
+axes = axes[0]
+
+for idir, dirname in enumerate(dirnames):
+    ax = axes[idir]
+
+    x, y, time, data = read_data(filetype, dirname, step)
+
+    kx, ky, kx2d, ky2d, kmag, dx, dy = make_kgrid(x, y)
+
+    kmin_x = 1.0 / (x.size * dx)
+    kmin_y = 1.0 / (y.size * dy)
+    kmin = min(kmin_x, kmin_y)
+
+    kmax_x = np.max(np.abs(kx))
+    kmax_y = np.max(np.abs(ky))
+    kmax = min(kmax_x, kmax_y)
+
+    kbins = np.arange(kmin, kmax + kmin, kmin)
+    kbinc = 0.5 * (kbins[1:] + kbins[:-1])
+
+    for specname in specnames:
+        Epower = compute_spectrum(specname, data, kx2d, ky2d, kmag, kbins)
+
+        Eplot = Epower.copy()
+
+#        if specname == "enstrophy":
+#            Eplot *= dx**2
+        if specname == "enstrophy": 
+            Eplot = Eplot / (kbinc**2)
+
+        if specname == "magpot":
+            Eplot *= 1.0/(dx**2)
+
+        label = speclabel_dict.get(specname, specname)
+
+        if specname == "crosshelicity":
+            valid = Eplot != 0.0
+            ax.plot(kbinc[valid], np.abs(Eplot[valid]), "-", mfc="none", label=label)
+        else:
+            valid = Eplot > 0.0
+            ax.plot(kbinc[valid], Eplot[valid], "-", mfc="none", label=label)
+
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel(r"$k/(2\pi)$")
+
+    if idir == 0:
+        ax.set_ylabel("power spectrum")
+
+    ax.axvline(10.0 * np.sqrt(2.0), linestyle="--", color="black")
+    ax.text(10.0 * np.sqrt(2.0), 0.05, "injection scale",
+            transform=ax.get_xaxis_transform(), ha="center", va="bottom")
+
+    title = os.path.basename(os.path.normpath(dirname))
+    ax.set_title(rf"{title}, time = {time:.2f}")
+    ax.legend(loc="upper right")
+
+outroot = "compare_spec_" + "_".join(specnames)
+for dirname in dirnames:
+    outroot += "_" + os.path.basename(os.path.normpath(dirname))
+
+for format_fig in ["pdf", "png"]:
+    outdir = format_fig + "file"
+    os.makedirs(outdir, exist_ok=True)
+
+    outputfile = os.path.join(outdir, f"{outroot}_snap{step:05d}.{format_fig}")
+    print("making plot file", outputfile)
+    plt.savefig(outputfile, bbox_inches="tight")
 
 plt.show()
-
-#
-#    kmin = np.min(1.0/(xmax - xmin))
-#    kmax = np.min(0.5*nx/(xmax - xmin))
-#
-#    kbins = np.arange(kmin,kmax,kmin)
-#    N = len(kbins)
-#
-#
-#    index = np.digitize(kwave.flat, kbins)
-#    nbins = np.bincount(index)
-#    Espectrum = np.zeros(len(nbins) - 1)1
-#    print(kx)
-#    print(ky)
-
-
-
-#    pg00 = plt.text(0.5*(xmin+xmax),ymax*1.1,r"$\mathrm{time}=%.2f$"%(time),horizontalalignment="center")
-#
-#    dx = x[0,1] - x[0,0]
-#    dy = y[1,0] - y[0,0]
-#
-#    dvxdx = np.gradient( vx, axis=1 )/dx
-#    dvydy = np.gradient( vy, axis=0 )/dy
-#    dvxdy = np.gradient( vx, axis=0 )/dy
-#    dvydx = np.gradient( vy, axis=1 )/dx
-#
-##    for j in range(1,ny-1):
-##        for i in range(1,nx-1):
-##            dvxdx[j,i] = 0.5*( vx[j,i+1] - vx[j,i-1] )/dx
-##            dvydy[j,i] = 0.5*( vy[j+1,i] - vy[j-1,i] )/dy
-#
-#    omega = dvydx - dvxdy
-##    omega = dvxdx + dvydy
-#
-#    ome_disp = np.sqrt(np.average(omega[1:nx-1,1:nx-1]**2))
-#    print(ome_disp, np.sqrt(np.average((dvxdx+dvydy)[1:nx-1,1:nx-1]**2)))
-#
-#
-#    im=plt.imshow(omega/ome_disp,extent=(xmin,xmax,ymin,ymax),origin="lower",cmap=plt.cm.bwr,vmin=-5,vmax=5)
-#
-#    if istep == step_s: 
-#    graph_list.append([pg00,im])               
-#
-#
-#ani = animation.ArtistAnimation(fig, graph_list, interval=200) 
-#print("making animation file", fname_anime)
-#ani.save(dirname + "/" + fname_anime, writer="imagemagick")
-##plt.show()
-
