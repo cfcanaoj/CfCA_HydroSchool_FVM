@@ -7,20 +7,20 @@ integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter::nx=50   ! the number of grids in the simulation box
-integer,parameter::ny=nx*3 ! the number of grids in the simulation box
-integer,parameter::ngh=2         ! the number of ghost cells
-integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::is=ngh+1         ! the index of the leftmost grid
-integer,parameter::js=ngh+1         ! the index of the leftmost grid
-integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
-integer,parameter::je=ny+ngh     ! the index of the rightmost grid
-real(8),parameter::xmin=-0.25d0,xmax=0.25d0
-real(8),parameter::ymin=-0.75d0,ymax=0.75d0
+integer,parameter :: nx=50   ! the number of grids in the simulation box
+integer,parameter :: ny=nx*3 ! the number of grids in the simulation box
+integer,parameter :: ngh=2         ! the number of ghost cells
+integer,parameter :: nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: is=ngh+1         ! the index of the leftmost grid
+integer,parameter :: js=ngh+1         ! the index of the leftmost grid
+integer,parameter :: ie=nx+ngh     ! the index of the rightmost grid
+integer,parameter :: je=ny+ngh     ! the index of the rightmost grid
+real(8),parameter :: xmin=-0.25d0,xmax=0.25d0
+real(8),parameter :: ymin=-0.75d0,ymax=0.75d0
 
-real(8),parameter::Ccfl=0.4d0
-real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
+real(8),parameter :: Ccfl=0.4d0
+real(8),parameter : :gam=5.0d0/3.0d0 !! adiabatic index
 
 real(8), parameter :: alpha = 0.1d0    ! decay timescale of divergence B
 
