@@ -1,63 +1,63 @@
 module params
-    real(8),parameter:: timemax=0.15d0 ! simulation end time
+  real(8),parameter:: timemax=0.15d0 ! simulation end time
     
-    ! option
-    integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
+  ! option
+  integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
     
-    ! coordinate 
-    integer,parameter::nx=128! the number of grids in the simulation box
-    integer,parameter::ny=128 ! the number of grids in the simulation box
-    integer,parameter::ngh=2         ! the number of ghost cells
-    integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-    integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-    integer,parameter::is=ngh+1         ! the index of the leftmost grid
-    integer,parameter::js=ngh+1         ! the index of the leftmost grid
-    integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
-    integer,parameter::je=ny+ngh     ! the index of the rightmost grid
-    real(8),parameter::xmin=-0.5d0,xmax=0.5d0
-    real(8),parameter::ymin=-0.5d0,ymax=0.5d0
-    real(8),parameter::zmin=0.0d0,zmax=1.0d0
+  ! coordinate 
+  integer,parameter::nx=128 ! the number of grids in the simulation box
+  integer,parameter::ny=128 ! the number of grids in the simulation box
+  integer,parameter::ngh=2         ! the number of ghost cells
+  integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
+  integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
+  integer,parameter::is=ngh+1         ! the index of the leftmost grid
+  integer,parameter::js=ngh+1         ! the index of the leftmost grid
+  integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
+  integer,parameter::je=ny+ngh     ! the index of the rightmost grid
+  real(8),parameter::xmin=-0.5d0,xmax=0.5d0
+  real(8),parameter::ymin=-0.5d0,ymax=0.5d0
+  real(8),parameter::zmin=0.0d0,zmax=1.0d0
     
-    real(8),parameter::Ccfl=0.4d0
+  real(8),parameter::Ccfl=0.4d0
     
+  ! indices of the conservative variables
+  integer, parameter :: IDN = 1
+  integer, parameter :: IMX = 2
+  integer, parameter :: IMY = 3
+  integer, parameter :: IMZ = 4
+  integer, parameter :: IPR = 5
+  integer, parameter :: IBX = 6
+  integer, parameter :: IBY = 7
+  integer, parameter :: IBZ = 8
+  integer, parameter :: NVAR = 5
+  integer, parameter :: NFLX = 8
     
-    ! indices of the conservative variables
-    integer, parameter :: IDN = 1
-    integer, parameter :: IMX = 2
-    integer, parameter :: IMY = 3
-    integer, parameter :: IMZ = 4
-    integer, parameter :: IPR = 5
-    integer, parameter :: IBX = 6
-    integer, parameter :: IBY = 7
-    integer, parameter :: IBZ = 8
-    integer, parameter :: NVAR = 5
-    integer, parameter :: NFLX = 8
-    
-    ! indices of the primitive variables
-    integer, parameter :: IVX = 2
-    integer, parameter :: IVY = 3
-    integer, parameter :: IVZ = 4
-    integer, parameter :: IEN = 5
-    
-    real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
+  ! indices of the primitive variables
+  integer, parameter :: IVX = 2
+  integer, parameter :: IVY = 3
+  integer, parameter :: IVZ = 4
+  integer, parameter :: IEN = 5
+  
+  real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
 
-    ! output 
-    character(20),parameter::dirname="ct" ! directory name
-    logical, parameter :: flag_binary = .true.
+  ! output 
+!  character(20),parameter::dirname="ct_openmp" ! directory name
+  character(20),parameter::dirname="ct_noopt" ! directory name
+  logical, parameter :: flag_binary = .false.
     
-    ! snapshot
-    integer, parameter :: unitsnap = 17
-    real(8), parameter:: dtsnap=0.5d-2
+  ! snapshot
+  integer, parameter :: unitsnap = 17
+  real(8), parameter:: dtsnap=0.5d-2
     
-    ! realtime analysis 
-    integer, parameter :: nevo = 1
-    integer, parameter :: unitevo =11
-    integer, parameter :: unitbin =13
+  ! realtime analysis 
+  integer, parameter :: nevo = 1
+  integer, parameter :: unitevo =11
+  integer, parameter :: unitbin =13
 end module
 
 program main
 !$ use omp_lib
-use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
+use params, only : nxtot, nytot, NVAR, NFLX, dirname, unitevo, timemax, nevo
 implicit none
 
 ! time evolution
@@ -78,60 +78,76 @@ real(8),dimension(3,nxtot,nytot) :: Bc
 real(8),dimension(NVAR,nxtot,nytot) :: F
 real(8),dimension(NVAR,nxtot,nytot) :: G
 real(8),dimension(3,nxtot,nytot) :: E 
+real(8),dimension(nxtot,nytot) :: weight1, weight2, e2_xf, e3_xf, e1_yf, e3_yf, Etmp
+real(8),dimension(NFLX,nxtot,nytot) :: Ql, Qr
 
 real(8) :: phys_evo(nevo)
-
+integer :: i, j
 real(8), external :: TimestepControl
+real(8) :: t0, t1
 
 !logical :: flag_binary = .false.
 
-      ! make the directory for output
-      call makedirs(trim(dirname))
+  ! make the directory for output
+  call makedirs(trim(dirname))
 
-    write(6,*) "setup grids and initial condition"
-    call GenerateGrid(xf, xv, yf, yv)
-    call GenerateProblem(xv, yv, Q, Bs, Bc)
-    call Prim2Consv(Q, Bc, U)
-    call BoundaryCondition( Q, Bs, Bc )
-    call Output( time, .TRUE., dirname, xv, yv, Q, Bc )
+  write(6,*) "setup grids and initial condition"
+  call GenerateGrid(xf, xv, yf, yv)
+  call GenerateProblem(xv, yv, Q, Bs, Bc)
+  call Prim2Consv(Q, Bc, U)
+!$omp parallel default(shared)
+  call BoundaryCondition( Q, Bs, Bc )
+!$omp end parallel
+  call Output( time, .TRUE., dirname, xv, yv, Q, Bc )
 
 
   write(6,*) "Start the simulation"
   open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
+!  t0 = omp_get_wtime()
 ! main loop
   do 
-        dt = TimestepControl(xf, yf, Q, Bc)
-        if( time + dt > timemax ) dt = timemax - time
+    dt = TimestepControl(xf, yf, Q, Bc)
+    if( time + dt > timemax ) dt = timemax - time
 
-        Uo(:,:,:) = U(:,:,:)
-        Bso(:,:,:) = Bs(:,:,:)
+!$omp parallel default(shared)
+!$omp do collapse(2) schedule(static) private(i,j)
+    do j=1,nytot
+    do i=1,nxtot
+      Uo(:,i,j) = U(:,i,j)
+      Bso(:,i,j) = Bs(:,i,j)
+    enddo
+    enddo
+!$omp end do
 
+    call NumericalFlux( 0.5*dt, xf, yf, Q, Bc, Bs, F, G, E)
+    call UpdateConsv( 0.5d0*dt,  xf, xv, yf, yv, F, G, E, Uo, Bso, U, Bs )
+    call Consv2Prim( U, Bs, Q, Bc )
+    call BoundaryCondition( Q, Bs, Bc )
 
-        call NumericalFlux( 0.5*dt, xf, yf, Q, Bc, Bs, F, G, E )
-        call UpdateConsv( 0.5d0*dt,  xf, xv, yf, yv, F, G, E, Uo, Bso, U, Bs )
-        call Consv2Prim( U, Bs, Q, Bc )
-        call BoundaryCondition( Q, Bs, Bc )
+    call NumericalFlux( dt, xf, yf, Q, Bc, Bs, F, G, E)
+    call UpdateConsv( dt, xf, xv, yf, yv, F, G, E, Uo, Bso, U, Bs )
+    call Consv2Prim( U, Bs, Q, Bc )
+    call BoundaryCondition( Q, Bs, Bc )
 
-        call NumericalFlux( dt, xf, yf, Q, Bc, Bs, F, G, E )
-        call UpdateConsv( dt, xf, xv, yf, yv, F, G, E, Uo, Bso, U, Bs )
-        call Consv2Prim( U, Bs, Q, Bc )
-        call BoundaryCondition( Q, Bs, Bc )
+!$omp end parallel
 
-         time=time+dt
-         ntime = ntime + 1
+    time=time+dt
+    ntime = ntime + 1
 
-         if( mod(ntime,10) .eq. 0 ) then
-             call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
-             write(unitevo,*) time, phys_evo(1:nevo)
-         endif
-         call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
+!         if( mod(ntime,10) .eq. 0 ) then
+!             call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
+!             write(unitevo,*) time, phys_evo(1:nevo)
+!         endif
+    call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
 
-         print*, "time = ",time, "dt = ",dt
+    print*, "ntime = ",ntime, "time = ",time, dt
 
-         if(time >= timemax) exit 
-      enddo 
-      close(unitevo)
-      call Output( time, .TRUE., dirname, xv, yv, Q, Bc)
+    if(time >= timemax) exit 
+!    if(ntime >= 1000) exit 
+  enddo 
+!      t1 = omp_get_wtime()
+!     write(*,*) "max threads =", omp_get_max_threads() !, (t1 - t0), " s"
+  close(unitevo)
 
 
 !      write(6,*) "program has been finished"
@@ -160,7 +176,7 @@ integer::i,j
 
     dy=(ymax-ymin)/dble(ny)
     do j=1,nytot
-         yf(j) = dx*(j-(ngh+1))+ymin
+         yf(j) = dy*(j-(ngh+1))+ymin
     enddo
     do j=1,nytot-1
          yv(j) = 0.5d0*(yf(j+1)+yf(j))
@@ -234,11 +250,8 @@ real(8), intent(inout) :: Bs(3,nxtot,nytot)
 real(8), intent(inout) :: Bc(3,nxtot,nytot)
 integer::i,j
 
-!$omp parallel default(none) &
-!$omp shared(Q,Bs) &
-!$omp private(i,j) 
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
     do j=js-ngh,je+ngh
     do i=1,ngh
         Q(:,is-i,j)  = Q(:,ie+1-i,j)
@@ -247,7 +260,7 @@ integer::i,j
     enddo
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static)  private(i,j)
     do j=js-ngh,je+ngh
     do i=1,ngh
           Bs(1,is-i,j) = Bs(1,ie+1-i,j)
@@ -256,7 +269,7 @@ integer::i,j
     enddo
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
     do j=js-ngh,je+ngh+1
     do i=1,ngh
           Bs(2,is-i,j) = Bs(2,ie+1-i,j)
@@ -265,7 +278,7 @@ integer::i,j
     enddo
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
     do j=js-ngh,je+ngh
     do i=1,ngh
           Bs(3,is-i,j) = Bs(3,ie+1-i,j)
@@ -274,7 +287,7 @@ integer::i,j
     enddo
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
     ! y inner boundary
     do j=1,ngh
     do i=is-ngh,ie+ngh
@@ -284,7 +297,7 @@ integer::i,j
     enddo
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
     do j=1,ngh
     do i=is-ngh,ie+ngh+1
         Bs(1,i,js-j) = Bs(1,i,je+1-j)
@@ -293,7 +306,7 @@ integer::i,j
     enddo
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
     do j=1,ngh
     do i=is-ngh,ie+ngh
         Bs(2,i,js-j) = Bs(2,i,je+1-j)
@@ -302,7 +315,7 @@ integer::i,j
     enddo
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
     do j=1,ngh
     do i=is-ngh,ie+ngh
         Bs(3,i,js-j) = Bs(3,i,je+1-j)
@@ -310,9 +323,6 @@ integer::i,j
     enddo
     enddo
 !$omp end do
-
-!$omp end parallel
-
 
     ! boundary condition for the cell centered B field
     call CellCenterMagneticField(is-ngh, is-1,   js-ngh, je+ngh, Bs, Bc)
@@ -337,9 +347,6 @@ real(8), intent(in) :: Bc(3,nxtot,nytot)
 real(8), intent(out) :: U(NVAR,nxtot,nytot)
 integer::i,j
 
-!$omp parallel do default(none) collapse(2) schedule(static) &
-!$omp shared(Q,Bc,U) &
-!$omp private(i,j)
         do j=js,je
         do i=is,ie
             U(IDN,i,j) = Q(IDN,i,j)
@@ -351,7 +358,6 @@ integer::i,j
                                  + Q(IPR,i,j)/(gam - 1.0d0)
         enddo
         enddo
-!$omp end parallel do
       
 return
 end subroutine Prim2Consv
@@ -372,9 +378,7 @@ real(8) :: inv_d;
 
         call CellCenterMagneticField(is, ie, js, je, Bs, Bc)
 
-!$omp parallel do default(none) collapse(2) schedule(static) &
-!$omp shared(Q,Bc,U) &
-!$omp private(i,j,inv_d)
+!$omp do collapse(2) schedule(static) private(i,j,inv_d)
         do j=js,je
         do i=is,ie
             Q(IDN,i,j) = U(IDN,i,j)
@@ -387,7 +391,7 @@ real(8) :: inv_d;
                         - 0.5d0*(Bc(1,i,j)**2 + Bc(2,i,j)**2 + Bc(3,i,j)**2) )*(gam-1.0d0)
         enddo
         enddo
-!$omp end parallel do
+!$omp end do
 
 return
 end subroutine Consv2Prim
@@ -403,9 +407,7 @@ real(8), intent(out) :: Bc(3,nxtot,nytot)
 integer::i,j
 
 
-!$omp parallel do default(none) collapse(2) schedule(static) &
-!$omp shared(Bc,Bs,ibeg,ifin,jbeg,jfin) &
-!$omp private(i,j)
+!$omp do collapse(2) schedule(static) private(i,j)
         do j=jbeg,jfin
         do i=ibeg,ifin
             Bc(1,i,j) = 0.5d0*( Bs(1,i+1,j) + Bs(1,i,j) )
@@ -413,7 +415,7 @@ integer::i,j
             Bc(3,i,j) = Bs(3,i,j) 
         enddo
         enddo
-!$omp end parallel do
+!$omp end do
 
 return
 end subroutine CellCenterMagneticField
@@ -495,27 +497,26 @@ real(8), intent(in) :: Bs(3,nxtot,nytot)
 real(8), intent(out) :: F(NVAR,nxtot,nytot)
 real(8), intent(out) :: G(NVAR,nxtot,nytot)
 real(8), intent(out) :: E(3,nxtot,nytot)
+
+! the following arrays are shared between threads
+real(8), save :: Ql(NFLX,nxtot,nytot), Qr(NFLX,nxtot,nytot)
+real(8), save :: weight1(nxtot,nytot), weight2(nxtot,nytot)
+real(8), save :: e2_xf(nxtot,nytot), e3_xf(nxtot,nytot)
+real(8), save :: e1_yf(nxtot,nytot), e3_yf(nxtot,nytot)
+real(8), save :: Etmp(nxtot,nytot)
     
 integer::i,j
-real(8),dimension(NFLX,nxtot,nytot):: Ql,Qr
 real(8),dimension(NFLX):: flx
 real(8) :: dQm(NVAR), dQp(NVAR), dQmon(NVAR)
     
-real(8),dimension(nxtot,nytot) :: e2_xf, e3_xf
-real(8),dimension(nxtot,nytot) :: e1_yf, e3_yf
-real(8),dimension(nxtot,nytot) :: weight1, weight2
 real(8) :: wghtCT
 
-real(8) :: Etmp(nxtot,nytot) 
 real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
 
 ! numerical flux in the x direction
-!$omp parallel default(none) &
-!$omp shared(Q,F,G,Ql,Qr,Bs,Bc,xf,yf,weight1,weight2,e2_xf,e3_xf,e1_yf,e3_yf,dt) &
-!$omp private(i,j,flx,wghtCT,dQp,dQm,dQmon)
     
 ! hydro part
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j,dQp,dQm,dQmon)
         do j=js-1,je+1
         do i=is-1,ie+1
             dQp(1:NVAR) = Q(1:NVAR,i+1,j) - Q(1:NVAR,i  ,j)
@@ -533,7 +534,7 @@ real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
 !$omp end do
     
 ! B field part
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j,dQp,dQm,dQmon)
         do j=js-1,je+1
         do i=is-1,ie+1
             dQp(1:3) = Bc(1:3,i+1,j) - Bc(1:3,i  ,j)
@@ -549,7 +550,7 @@ real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
         enddo
 !$omp end do
     
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j,flx,wghtCT)
         do j=js-1,je+1
         do i=is,ie+1
                 if (flag_flux == 1 ) then 
@@ -569,7 +570,7 @@ real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
     
     
 ! numerical flux in the y direction
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j,dQp,dQm,dQmon)
           do j=js-1,je+1
           do i=is-1,ie+1
              dQp(1:NVAR) = Q(1:NVAR,i,j+1) - Q(1:NVAR,i,j  )
@@ -586,7 +587,7 @@ real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
 !$omp end do
     
 ! B field part
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j,dQp,dQm,dQmon)
           do j=js-1,je+1
           do i=is-1,ie+1
              dQp(1:3) = Bc(1:3,i,j+1) - Bc(1:3,i,j  )
@@ -602,7 +603,7 @@ real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
           enddo
 !$omp end do
     
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j,flx,wghtCT)
           do j=js,je+1
           do i=is-1,ie+1
               if( flag_flux == 1 ) then 
@@ -619,26 +620,18 @@ real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
           enddo
           enddo
 !$omp end do
-!$omp end parallel
 
-!$omp parallel default(none) &
-!$omp shared(Q,Bc,Etmp) &
-!$omp private(i,j) 
     
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
       do j=js-1, je+1
       do i=is-1, ie+1
            Etmp(i,j) = Q(IVY,i,j)*Bc(1,i,j) - Q(IVX,i,j)*Bc(2,i,j)
       enddo
       enddo
 !$omp end do 
-!$omp end parallel
 
-!$omp parallel default(none) &
-!$omp shared(Q,Bc,E,Etmp,weight1,weight2,e3_yf,e3_xf,e2_xf,e1_yf) &
-!$omp private(i,j,de3_l1,de3_l2,de3_r1,de3_r2) 
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
       do j=js, je
       do i=is, ie+1
            E(2,i,j) = e2_xf(i,j)
@@ -646,7 +639,7 @@ real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
       enddo
 !$omp end do 
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
       do j=js, je+1
       do i=is, ie
            E(1,i,j) = e1_yf(i,j)
@@ -654,7 +647,7 @@ real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
       enddo
 !$omp end do 
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(de3_l2, de3_r2, de3_l1, de3_r1,i,j)
       do j=js, je+1
       do i=is, ie+1
           de3_l2 = (1.0d0-weight1(i,j-1))*(e3_yf(i  ,j) - Etmp(i  ,j-1)) + &
@@ -675,7 +668,6 @@ real(8) :: de3_l1, de3_r1, de3_l2, de3_r2
       enddo
 !$omp end do 
 
-!$omp end parallel
 
     
 return
@@ -1077,16 +1069,13 @@ implicit none
 real(8), intent(in) :: dt1
 real(8), intent(in)  :: xf(nxtot), yf(nytot)
 real(8), intent(in)  :: xv(nxtot), yv(nytot)
-real(8), intent(in)  :: F(NVAR,nxtot,nytot), G(NVAR,nxtot,nytot)
+real(8), intent(in)  :: F(NVAR,nxtot,nytot), G(NVAR,nxtot,nytot), E(3,nxtot,nytot)
 real(8), intent(in)  :: Uo(NVAR,nxtot,nytot), Bso(3,nxtot,nytot)
-real(8), intent(out) :: U(NVAR,nxtot,nytot), Bs(3,nxtot,nytot), E(3,nxtot,nytot)
+real(8), intent(out) :: U(NVAR,nxtot,nytot), Bs(3,nxtot,nytot)
 integer::i,j,ihy
 
-!$omp parallel default(none) &
-!$omp shared(U,Uo,Bs,Bso,F,G,E,xf,yf,xv,yv,dt1) &
-!$omp private(i,j) 
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j,ihy)
       do j=js,je
       do i=is,ie
       do ihy=1,NVAR
@@ -1097,25 +1086,25 @@ integer::i,j,ihy
       enddo
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
       do j=js,je
       do i=is,ie+1
            Bs(1,i,j) = Bso(1,i,j) &
-                       - dt1*(E(3,i,j+1) - E(3,i,j))/(yv(j+1) - yv(j))
+                     - dt1*(E(3,i,j+1) - E(3,i,j))/(yv(j+1) - yv(j))
       enddo
       enddo
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
       do j=js,je+1
       do i=is,ie
            Bs(2,i,j) = Bso(2,i,j) &
-                       + dt1*(E(3,i+1,j) - E(3,i,j))/(xv(i+1) - xv(i))
+                     + dt1*(E(3,i+1,j) - E(3,i,j))/(xv(i+1) - xv(i))
       enddo
       enddo
 !$omp end do
 
-!$omp do collapse(2) schedule(static)
+!$omp do collapse(2) schedule(static) private(i,j)
       do j=js,je
       do i=is,ie
            Bs(3,i,j) = Bso(3,i,j) &
@@ -1126,7 +1115,6 @@ integer::i,j,ihy
 !$omp end do
 
 
-!$omp end parallel
 
 return
 end subroutine UpdateConsv
@@ -1194,12 +1182,12 @@ integer, save :: nsnap = 0
         close(unitsnap)
     else 
           filename = trim(dirname)//"/snap"//trim(filename)//".dat"
-          open(unitbin,file=filename,form='formatted',action="write")
-          write(unitbin,*) "# time = ",time
-          write(unitbin,*) "#nx, ny = ", nx, ny
+          open(unitsnap,file=filename,form='formatted',action="write")
+          write(unitsnap,*) "# time = ",time
+          write(unitsnap,*) "#nx, ny = ", nx, ny
           do j=js,je
           do i=is,ie
-              write(unitbin,*) xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), Q(IPR,i,j), &
+              write(unitsnap,'(1p,10(es24.16,1x))') xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), Q(IPR,i,j), &
                   Bc(1,i,j), Bc(2,i,j), Bc(3,i,j)
           enddo
           enddo
@@ -1247,4 +1235,3 @@ integer::i,j
       
 return
 end subroutine RealtimeAnalysis
-

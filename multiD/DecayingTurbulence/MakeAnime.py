@@ -1,75 +1,68 @@
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import matplotlib.animation as animation
 import re
+
+def read_textdata(file):
+    with open(file, "r") as f:
+        time = float(f.readline().split()[-1])
+        nx, ny = map(int, f.readline().split()[-2:])
+
+    arr = np.loadtxt(file).reshape(ny, nx, -1)
+
+    x = arr[:, :, 0]
+    y = arr[:, :, 1]
+
+    names = ["rho", "vx", "vy", "vz", "pre", "Bx", "By", "Bz", "Vor", "Az"]
+    data_dict = {name: arr[:, :, i+2] for i, name in enumerate(names)}
+
+    return x, y, time, data_dict
 
 dirname = sys.argv[1]
 step_s = int(sys.argv[2])
 step_e = int(sys.argv[3])
-
-fig = plt.figure()  
-plt.xlim(0, 1)     
-plt.ylim(0, 1)
-plt.xlabel("x axis") 
-plt.ylabel("y axis") 
 
 xmin = -0.5
 xmax =  0.5
 ymin = -0.5
 ymax =  0.5
 
-fname_anime = "animation.mp4"
+fig_height = 4.8
+fig_width = fig_height*(xmax-xmin)/(ymax-ymin) + 1.9
+fig = plt.figure(figsize=(fig_width, fig_height)) 
 
+plt.xlim(xmin,xmax)
+plt.ylim(ymin,ymax)
+plt.xlabel("x axis") 
+plt.ylabel("y axis") 
+
+fname_anime = "animation.mp4"
 
 graph_list = [] 
 for istep in range(step_s,step_e+1):
-    foutname = dirname + "/snap%05d.dat"%(istep)
+    foutname = dirname + "/snap%05d.dat"%(istep) 
+
     print("making plot ",foutname)
-    with open(foutname, 'r') as data_file:
-        line = data_file.readline();
-        attributes1 = re.findall("\d+\.\d+", line)
-
-        line = data_file.readline();
-        attributes2 = re.findall("\d+", line)
-
-    time = float(attributes1[0]) 
-    nx = int(attributes2[0])
-    ny = int(attributes2[1])
-
-    data = np.loadtxt(foutname)
-
-    print(data[:,0].shape)
-
-    x = data[:,0].reshape(ny,nx)
-    y = data[:,1].reshape(ny,nx)
-    den = data[:,2].reshape(ny,nx)
-    vx = data[:,3].reshape(ny,nx)
-    vy = data[:,4].reshape(ny,nx)
-    vz = data[:,5].reshape(ny,nx)
-    pre = data[:,6].reshape(ny,nx)
-    bx = data[:,7].reshape(ny,nx)
-    by = data[:,8].reshape(ny,nx)
-    bz = data[:,9].reshape(ny,nx)
-    vor = data[:,10].reshape(ny,nx)
-    Bpot = data[:,11].reshape(ny,nx)
-
-    plt.xlim(xmin,xmax)
-    plt.ylim(ymin,ymax)
+    x, y, time, data = read_textdata(foutname)
 
     pg00 = plt.text(0.5*(xmin+xmax),ymax*1.1,r"$\mathrm{time}=%.2f$"%(time),horizontalalignment="center")
 
-    vor_disp = np.sqrt(np.average(vor[1:nx-1,1:nx-1]**2))
-
-
-    im=plt.imshow(vor/vor_disp,extent=(xmin,xmax,ymin,ymax),origin="lower",cmap=plt.cm.bwr,vmin=-5,vmax=5)
+    im=plt.imshow(data['Vor'],extent=(xmin,xmax,ymin,ymax),origin="lower",cmap=cm.bwr,vmin=-20,vmax=20)
 
     if istep == step_s: 
-        plt.colorbar(im,orientation="vertical")
+        cbar = plt.colorbar(im,orientation="vertical")
+        cbar.set_label("vorticity")
     graph_list.append([pg00,im])               
-
 
 ani = animation.ArtistAnimation(fig, graph_list, interval=200) 
 print("making animation file", fname_anime)
-ani.save(dirname + "/" + fname_anime, writer="imagemagick")
-#plt.show()
+ani.save(
+    dirname + "/" + fname_anime,
+    writer="ffmpeg",
+    dpi=150,
+    codec="libx264",
+    extra_args=["-pix_fmt", "yuv420p", "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"]
+)
+plt.show()

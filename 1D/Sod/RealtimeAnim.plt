@@ -1,15 +1,15 @@
 set terminal x11
 
 if (ARGC < 3) {
-   print "Usage: gnuplot -c RealtimeAnim.plt model ibeg ifin"
-   print "Now set model = lax, ibeg = 1, ifin = 40"
-   model="lax"
+   print "Usage: gnuplot -c RealtimeAnim.plt ibeg ifin model"
+   print "Now set ibeg = 1, ifin = 40, model = lax"
    ibeg=1
    ifin=40
+   model="lax"
 } else {
-   model = (ARG1)
-   ibeg = int(ARG2)
-   ifin = int(ARG3)
+   ibeg = int(ARG1)
+   ifin = int(ARG2)
+   model = (ARG3)
 }
 set xlabel "x"
 
@@ -24,7 +24,7 @@ do for [i = ibeg:ifin ] {
   time=system(command)
 
   set title sprintf("time = %s",time) 
-  plot inpfile u 1:2 ti "numerical" w lp ,\
+  plot inpfile u 1:2 ti model w lp ,\
       "sod_ana.dat" u ($1*time/0.2):2 ti "exact solution" w l
   pause 0.1
 }
