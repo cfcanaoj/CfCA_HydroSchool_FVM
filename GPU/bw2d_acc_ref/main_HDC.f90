@@ -80,7 +80,7 @@ real(8),dimension(NVAR,nxtot,nytot) :: G
 real(8) :: phys_evo(nevo)
 
  real(8)::time_begin,time_end
- logical,parameter:: benchmarkmode=.true.
+ logical,parameter:: benchmarkmode=.false.
 ! function 
 real(8) :: t0, t1
 

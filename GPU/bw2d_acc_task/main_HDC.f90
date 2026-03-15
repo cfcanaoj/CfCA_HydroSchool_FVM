@@ -79,8 +79,9 @@ real(8),dimension(NVAR,nxtot,nytot) :: G
 ! realtime analysis
 real(8) :: phys_evo(nevo)
 
+real(8)::time_begin,time_end
+logical,parameter:: benchmarkmode=.false.
 ! function 
-real(8), external :: TimestepControl
 real(8) :: t0, t1
 
 external :: makedirs, GenerateGrid, GenerateProblem
@@ -100,13 +101,14 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
   call Output( time, .TRUE., xv, yv, Q )
 
 
-  write(6,*) "Start the simulation"
+  print *,"Simulation has started."
   open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
   ntime = 1
+  time_begin = omp_get_wtime()
 !  t0 = omp_get_wtime()
   mloop: do !ntime=1,ntimemax
-    dt = TimestepControl(xf, yf, Q)
+    call TimestepControl(xf, yf, Q, dt)
     if( time + dt > timemax ) dt = timemax - time
 
 !$omp parallel default(shared)
@@ -135,18 +137,20 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
 
     time=time+dt
     ntime = ntime+1
-    call Output( time, .FALSE., xv, yv, Q)
+    if(.not. benchmarkmode) call Output( time, .FALSE., xv, yv, Q)
 
-    print*, "ntime = ",ntime, "time = ",time, dt
+    if(.not. benchmarkmode) print*, "ntime = ",ntime, "time = ",time, dt
 
     if( mod(ntime,10) .eq. 0 ) then
-      call RealtimeAnalysis(xv,yv,Q,phys_evo)
-      write(unitevo,*) time, phys_evo(1:nevo)
+      if(.not. benchmarkmode) call RealtimeAnalysis(xv,yv,Q,phys_evo)
+      if(.not. benchmarkmode) write(unitevo,*) time, phys_evo(1:nevo)
     endif
 
     if(time >= timemax) exit mloop
 !    if(ntime >= 1000) exit mloop
   enddo mloop
+  time_end = omp_get_wtime()
+  print *, "sim time [s]:", time_end-time_begin
 !  t1 = omp_get_wtime()
 
 !  write(*,*) "max threads =", omp_get_max_threads()
@@ -154,6 +158,7 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
 
   close(unitevo)
       call Output( time, .TRUE.,xv, yv, Q)
+  print *, "Simulation has finished"
 
 !      write(6,*) "program has been finished"
 !contains
@@ -379,11 +384,12 @@ end subroutine Consv2Prim
 !              dt = CFL * min_i [ dx_i / (|v_i| + c_s,i) ]
 !            where c_s = sqrt(gam * p / rho).
 !=============================================================
-real(8) function TimestepControl(xf, yf, Q)
+subroutine TimestepControl(xf, yf, Q, dt)
 use params, only : IDN, IVX, IVY, IPR, IBX, IBY, IBZ, NVAR, nxtot, nytot, &
                    is, ie, js, je, Ccfl, gam
 implicit none
 real(8), intent(in) :: xf(nxtot), yf(nytot), Q(NVAR,nxtot,nytot)
+real(8), intent(inout) :: dt
 real(8)::dtl1
 real(8)::dtl2
 real(8)::dtmin,cf
@@ -403,10 +409,10 @@ integer::i,j
       enddo
 !$omp end parallel do
 
-      TimestepControl = Ccfl* dtmin
+      dt = Ccfl* dtmin
 
 return
-end function TimestepControl
+end subroutine TimestepControl
 !---------------------------------------------------------------------
 !     van Leer monotonicity limiter 
 !---------------------------------------------------------------------
