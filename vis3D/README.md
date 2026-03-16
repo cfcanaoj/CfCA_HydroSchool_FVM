@@ -13,7 +13,6 @@ To learn about VisIt and paraview, you need to make the data for it. First login
 To treat HDF5 format, you need library. See [the instrucion](./InstallHDF5.md).
 If you just want to play with it, add the follwoing command in your`~/.bashrc`.
     
-    module load intel
     export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/hydro16/hdf5/lib
     
 Then copy the source code if you have not copy it yet.
