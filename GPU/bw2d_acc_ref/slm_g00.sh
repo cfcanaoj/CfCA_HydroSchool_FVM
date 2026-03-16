@@ -1,5 +1,5 @@
 #! /bin/bash
-#SBATCH --partition=workshop-1gpu
+#SBATCH --partition=workshop-2gpu
 #SBATCH --gres=gpu:1
 #SBATCH -o ./out%j.log
 #SBATCH -e ./err%j.log
