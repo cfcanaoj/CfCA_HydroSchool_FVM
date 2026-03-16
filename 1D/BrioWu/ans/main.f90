@@ -871,10 +871,10 @@ real(8) :: error
            error = error + 1.0d0
       enddo
 
-      open(1,file="error.dat",action="write",position="append")
-      write(1,*) nx, error
-      print*,"nx = ",nx, "error = ",error
-      close(1)
+    open(1,file="error.dat",action="write",position="append")
+    write(1,*) nx, error
+    print*,"nx = ",nx, "error = ",error
+    close(1)
       
 return
 end subroutine
