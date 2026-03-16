@@ -41,5 +41,5 @@ See the links.
 To use VisIt, go to the [instruction](https://moored-cave-326.notion.site/VisIt-535a672b1e024c018c04e38015d2a249).
 
 ## Preparation
-Abobe, you used a library in `~/hydro16/hdf5`. After the school you cannot use it. You need to install `hdf5` in your home directory in analysis server. See [the instrucion](./InstallHDF5.md).
+Abobe, you used a library in `/home/hydro16/hdf5`. After the school you cannot use it. You need to install `hdf5` in your home directory in analysis server. See [the instrucion](./InstallHDF5.md).
 
