@@ -452,7 +452,6 @@ real(8),intent(in) :: Ql(NVAR), Qr(NVAR)
 real(8),intent(out):: flx(NVAR)
 real(8):: Ul(NVAR), Ur(NVAR)
 real(8):: Fl(NVAR), Fr(NVAR)
-real(8):: Fst(NVAR)
 real(8):: cfl,cfr
 real(8):: sl, sr
 real(8):: pbl, pbr, ptotl, ptotr
