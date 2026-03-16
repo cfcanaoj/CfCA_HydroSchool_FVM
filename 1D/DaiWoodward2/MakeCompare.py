@@ -3,7 +3,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import gridspec
-
+import argparse
 
 def read_textdata(file):
     with open(file, "r") as f:
@@ -21,17 +21,21 @@ def read_textdata(file):
 
 
 #------------------------------------------------------------
-# Usage
-#   python MakePlot.py step dir1 [dir2 dir3 ...]
-# Example
-#   python MakePlot.py 10 lax roe hlld
-#------------------------------------------------------------
-if len(sys.argv) < 3:
-    print("Usage: python MakePlot.py step dir1 [dir2 dir3 ...]")
-    sys.exit(1)
-
-step = int(sys.argv[1])
-dirnames = sys.argv[2:]
+parser = argparse.ArgumentParser(
+    description="Create a comparison shapshot from multiple simulation outputs.",
+    usage="python3 MakeCompare.py [step] [dir1] [dir2]",
+    epilog=(
+        "Example:\n"
+        "  python3 MakeCompare.py 20 lax\n"
+        "  python3 MakeCompare.py 20 lax hll\n"
+    ),
+    formatter_class=argparse.RawTextHelpFormatter
+)
+parser.add_argument("step", type=int, help="step number")
+parser.add_argument("dirnames", nargs="+", help="one or more directories containing snapshot files")
+args = parser.parse_args()
+step       = args.step
+dirnames   = args.dirnames
 
 fig = plt.figure(figsize=(10, 10))
 gs = gridspec.GridSpec(2, 2, wspace=0.30, hspace=0.2)
