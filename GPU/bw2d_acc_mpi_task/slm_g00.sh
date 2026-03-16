@@ -1,7 +1,6 @@
 #! /bin/bash
-#SBATCH --partition=dgx-full
+#SBATCH --partition=workshop-2gpu
 #SBATCH --nodes=1
-#SBATCH --gpu-bind=closest
 #SBATCH --ntasks=2
 #SBATCH --gres=gpu:2
 #SBATCH -o ./out%j.log
@@ -20,5 +19,5 @@ module load nvhpc/25.7
 #export NV_ACC_DEBUG=0x800
 
 date >& out${SLURM_JOB_ID}.log
-time mpiexec -n 2 ./bw.x >> out${SLURM_JOB_ID}.log
+time mpiexec --bind-to none -n 2 ./bw.x >> out${SLURM_JOB_ID}.log
 date >> out${SLURM_JOB_ID}.log

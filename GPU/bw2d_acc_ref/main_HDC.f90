@@ -43,7 +43,7 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! output 
-character(20),parameter::dirname="hdc_noopt" ! directory name
+character(20),parameter::dirname="hdc" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17

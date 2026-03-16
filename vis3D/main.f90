@@ -83,7 +83,7 @@ subroutine GenerateGrid
     do k=1,nztot
          zf(k) = dz*(k-(ngs+1))+zmin
     enddo
-    do i=1,nxtot-1
+    do k=1,nztot-1
          zv(k) = 0.5d0*(zf(k+1)+zf(k))
     enddo
 
@@ -190,11 +190,11 @@ subroutine BoundaryCondition
   do j=js,je
   do i=is,ie
   do k=1,ngs 
-     Q(i,j,ks-k,IDN) = Q(i,js-1+j,k,IDN)
-     Q(i,j,ks-k,IPR) = Q(i,js-1+j,k,IPR)
-     Q(i,j,ks-k,IVX) = Q(i,js-1+j,k,IVX)
-     Q(i,j,ks-k,IVY) = Q(i,js-1+j,k,IVY)
-     Q(i,j,ks-k,IVZ) = Q(i,js-1+j,k,IVZ)
+     Q(i,j,ks-k,IDN) = Q(i,j,ks-1+k,IDN)
+     Q(i,j,ks-k,IPR) = Q(i,j,ks-1+k,IPR)
+     Q(i,j,ks-k,IVX) = Q(i,j,ks-1+k,IVX)
+     Q(i,j,ks-k,IVY) = Q(i,j,ks-1+k,IVY)
+     Q(i,j,ks-k,IVZ) = Q(i,j,ks-1+k,IVZ)
   enddo
   enddo
   enddo
@@ -517,7 +517,7 @@ subroutine Output
       integer,intent(in)  :: rank                             ! dataset rank
       integer(hsize_t), dimension(rank),intent(in)  :: dims   ! dataset dimensions
       character(80),intent(in):: dsetname                     ! dataset name
-      real(4),intent(in) :: dset
+      real(4),intent(in) :: dset(*)
       integer(hid_t) :: dset_id       ! dataset identifier
       integer(hid_t) :: dspace_id     ! dataspace identifier
       integer :: error
