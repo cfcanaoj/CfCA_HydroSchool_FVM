@@ -1,8 +1,12 @@
 #! /bin/bash
-#SBATCH --partition=ga80-1gpu
+#SBATCH --partition=workshop-2gpu
 #SBATCH --gres=gpu:1
 #SBATCH -o ./out%j.log
 #SBATCH -e ./err%j.log
+
+
+# regular partition
+##SBATCH --partition=ga80-1gpu
 
 # usage sbatch slm_g00.sh
 # other useful commands
