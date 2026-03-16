@@ -31,7 +31,7 @@ tar xvf hdf5-1.14.3.tar.gz
 Here if you want to use different compiler, please change FC, e.g., ifort.
 ```bash
 cd hdf5-1.14.3
-FC=gfortran ./configure --prefix=$HOME/local --enable-fortran
+FC=gfortran ./configure --prefix=$HOME/hdf5 --enable-fortran
 ```
 The -j option allows parallel compilation.
 ```bash
