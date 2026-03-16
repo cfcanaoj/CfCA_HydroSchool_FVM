@@ -89,9 +89,8 @@ real(8), external :: TimestepControl
          call Consv2Prim( U, Q )
 
          time=time+dt
-         ntime = ntime + 1
 !         print*,"time = ",time, "dt = ",dt
-
+         ntime = ntime + 1
          call Output( time, .FALSE., xv, Q )
 
          if( mod(ntime,10) .eq. 0 ) then
@@ -453,7 +452,6 @@ real(8),intent(in) :: Ql(NVAR), Qr(NVAR)
 real(8),intent(out):: flx(NVAR)
 real(8):: Ul(NVAR), Ur(NVAR)
 real(8):: Fl(NVAR), Fr(NVAR)
-real(8):: Fst(NVAR)
 real(8):: cfl,cfr
 real(8):: sl, sr
 real(8):: pbl, pbr, ptotl, ptotr
@@ -551,7 +549,6 @@ real(8):: Ul(NVAR), Ur(NVAR)
 real(8):: Ulst(NVAR), Urst(NVAR)
 real(8):: Uldst(NVAR), Urdst(NVAR)
 real(8):: Fl(NVAR), Fr(NVAR)
-real(8):: test(NVAR)
 real(8):: cfl,cfr
 real(8):: S0, S1, S2, S3, S4
 real(8):: pbl, pbr, ptotl, ptotr
@@ -572,10 +569,12 @@ integer :: i, n
                      + dsqrt( (2.0d0*pbr - gam*Qr(IPR))**2 &
                      + 4.0d0*gam*Qr(IPR)*( Qr(IBY)**2 + Qr(IBZ)**2 ) ) )/Qr(IDN) )
 
-    S0 = min( Ql(IVX) - cfl, Qr(IVX) - cfr)
-    S4 = max( Ql(IVX) + cfl, Qr(IVX) + cfr)
+!    S0 = min( Ql(IVX) - cfl, Qr(IVX) - cfr)
+!    S4 = max( Ql(IVX) + cfl, Qr(IVX) + cfr)
+    S0 = min( Ql(IVX), Qr(IVX) ) - max(cfl,cfr)
+    S4 = max( Ql(IVX), Qr(IVX) ) + max(cfl,cfr)
 
-          ! conserved variables in the left and right states
+    ! conserved variables in the left and right states
     Ul(IDN) = Ql(IDN)
     Ul(IVX) = Ql(IDN)*Ql(IVX)
     Ul(IVY) = Ql(IDN)*Ql(IVY)
@@ -631,12 +630,6 @@ integer :: i, n
     Urst_d_inv = 1.0d0/Urst(IDN)
     sqrtdl = dsqrt(Ulst(IDN))
     sqrtdr = dsqrt(Urst(IDN))
-
-!          if( sqrtdr .ne. sqrtdr ) then
-!              print*, "sqrtdr",sqrtdr, Cr, Cmr
-!             print*,"S", S0,S2,S4
-!              stop
-!          endif
 
     S1 = S2 - dabs(Bx)/sqrtdl
     S3 = S2 + dabs(Bx)/sqrtdr
@@ -731,10 +724,6 @@ integer :: i, n
        Uldst(IEN) = Ulst(IEN) - sqrtdl*bxsgn*(v_dot_B_stl - tmp)
        Urdst(IEN) = Urst(IEN) + sqrtdr*bxsgn*(v_dot_B_str - tmp)
    endif
-
-!         test = (S4 - S3)*Urst + (S3 - S2)*Urdst + (S2 - S1)*Uldst + (S1 - S0)*Ulst - S4*Ur + S0*Ul + Fr - Fl
-!         print*,test(IVperp2)
-         
 
     !--- Step 6.  Compute flux
     if( S0 >= 0.0d0 ) then
