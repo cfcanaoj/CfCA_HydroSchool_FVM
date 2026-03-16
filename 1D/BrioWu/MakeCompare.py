@@ -22,11 +22,6 @@ def read_textdata(file):
 
 
 #------------------------------------------------------------
-# Usage
-#   python MakePlot.py step dir1 [dir2 dir3 ...]
-# Example
-#   python MakePlot.py 10 lax roe hlld
-#------------------------------------------------------------
 parser = argparse.ArgumentParser(
     description="Create a comparison shapshot from multiple simulation outputs.",
     usage="python3 MakeCompare.py [step] [dir1] [dir2]",
