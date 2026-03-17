@@ -146,9 +146,8 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
     ntime = ntime+1
     call Output( time, .FALSE., xv, yv, Q)
 
-    print*, "ntime = ",ntime, "time = ",time, dt
-
     if( mod(ntime,10) .eq. 0 ) then
+      print*, "ntime = ",ntime, "time = ",time, "dt =" ,dt
       call RealtimeAnalysis(xv,yv,Q,phys_evo)
       write(unitevo,*) time, phys_evo(1:nevo)
     endif

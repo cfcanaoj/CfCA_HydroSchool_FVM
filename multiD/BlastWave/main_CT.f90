@@ -42,7 +42,7 @@ real(8),parameter::gam = 5.0d0/3.0d0 !! adiabatic index
 
 ! output 
 character(20),parameter::dirname="ct" ! directory name
-logical, parameter :: flag_binary = .false.
+logical, parameter :: flag_binary = .true.
   
 ! snapshot
 integer, parameter :: unitsnap = 17
@@ -84,8 +84,6 @@ real(8) :: phys_evo(nevo)
 integer :: i, j
 real(8), external :: TimestepControl
 real(8) :: t0, t1
-
-!logical :: flag_binary = .false.
 
   ! make the directory for output
     call makedirs(trim(dirname))
@@ -131,14 +129,13 @@ real(8) :: t0, t1
 
         time=time+dt
         ntime = ntime + 1
+        call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
 
         if( mod(ntime,10) .eq. 0 ) then 
+            print*, "ntime = ",ntime, "time = ",time, "dt =" ,dt
             call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
             write(unitevo,*) time, phys_evo(1:nevo)
         endif
-        call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
-  
-        print*, "ntime = ",ntime, "time = ",time, dt
   
         if(time >= timemax) exit 
     enddo 

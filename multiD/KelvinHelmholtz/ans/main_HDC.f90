@@ -1,6 +1,6 @@
 module params
 
-real(8), parameter :: timemax=10d0 ! simulation end time
+real(8), parameter :: timemax = 10d0 ! simulation end time
 
 ! option
 integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
@@ -44,11 +44,11 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! output 
-character(20),parameter::dirname="hdc" ! directory name
+character(20),parameter::dirname = "hdc" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
-real(8), parameter:: dtsnap=2.d-1
+real(8), parameter:: dtsnap = 2.d-1
 logical, parameter :: flag_binary = .true.
 
 ! realtime analysis 
@@ -57,6 +57,8 @@ integer, parameter :: nevo = 2
 
 end module
 
+!=====================================================================
+!=====================================================================
 program main
 !$ use omp_lib
 use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
@@ -101,14 +103,14 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
   call Output( time, .TRUE., xv, yv, Q )
 
 
-  write(6,*) "Start the simulation"
-  open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
+    write(6,*) "Start the simulation"
+    open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
-  ntime = 1
+    ntime = 1
 !  t0 = omp_get_wtime()
-  mloop: do !ntime=1,ntimemax
-    dt = TimestepControl(xf, yf, Q)
-    if( time + dt > timemax ) dt = timemax - time
+    mloop: do !ntime=1,ntimemax
+        dt = TimestepControl(xf, yf, Q)
+        if( time + dt > timemax ) dt = timemax - time
 
 !$omp parallel default(shared)
 !$omp do collapse(2) schedule(static) private(i,j,ihy)
@@ -121,37 +123,36 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
     end do
 !$omp end do
 
-    call NumericalFlux( dt, xf, yf, Q, F, G )
-    call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Uo, U )
-    call SrcTerms( 0.5d0*dt, dt, Q, U)
-    call Consv2Prim( U, Q )
-    call BoundaryCondition(Q )
+        call NumericalFlux( dt, xf, yf, Q, F, G )
+        call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Uo, U )
+        call SrcTerms( 0.5d0*dt, dt, Q, U)
+        call Consv2Prim( U, Q )
+        call BoundaryCondition(Q )
 
-    call NumericalFlux( dt, xf, yf, Q, F, G )
-    call UpdateConsv( dt, xf, yf, F, G, Uo, U )
-    call SrcTerms( dt, dt, Q, U)
-    call Consv2Prim( U, Q )
-    call BoundaryCondition( Q )
+        call NumericalFlux( dt, xf, yf, Q, F, G )
+        call UpdateConsv( dt, xf, yf, F, G, Uo, U )
+        call SrcTerms( dt, dt, Q, U)
+        call Consv2Prim( U, Q )
+        call BoundaryCondition( Q )
 !$omp end parallel
 
-    time=time+dt
-    ntime = ntime+1
-    call Output( time, .FALSE., xv, yv, Q)
+        time = time+dt
+        ntime = ntime+1
+        call Output( time, .FALSE., xv, yv, Q)
 
-    print*, "ntime = ",ntime, "time = ",time, dt
-
-    if( mod(ntime,100) .eq. 0 ) then
-      call RealtimeAnalysis(xv,yv,Q,phys_evo)
-      write(unitevo,*) time, phys_evo(1:nevo)
+    if( mod(ntime,10) .eq. 0 ) then
+        print*, "ntime = ",ntime, "time = ",time, "dt =" ,dt
+        call RealtimeAnalysis(xv,yv,Q,phys_evo)
+        write(unitevo,*) time, phys_evo(1:nevo)
     endif
 
     if(time >= timemax) exit mloop
   enddo mloop
-
   close(unitevo)
-      call Output( time, .TRUE.,xv, yv, Q)
 
-!      write(6,*) "program has been finished"
+    call Output( time, .TRUE.,xv, yv, Q)
+
+    write(6,*) "program has been finished"
 !contains
 end program
 !=============================================================
@@ -268,14 +269,14 @@ end do
 
 ! Fill y-direction ghost zones (periodic)
 !$omp do collapse(2) schedule(static) private(i,j,ihy)
-do j=1,ngh
-do i=1,nxtot-1
-  do ihy=1,NVAR
-    Q(ihy,i,js-j) = Q(ihy,i,je+1-j)
-    Q(ihy,i,je+j) = Q(ihy,i,js+j-1)
-  end do
-end do
-end do
+    do j=1,ngh
+    do i=1,nxtot-1
+        do ihy=1,NVAR
+            Q(ihy,i,js-j) = Q(ihy,i,je+1-j)
+            Q(ihy,i,je+j) = Q(ihy,i,js+j-1)
+        end do
+    end do
+    end do
 !$omp end do
 
 return

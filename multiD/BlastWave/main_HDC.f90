@@ -47,7 +47,7 @@ character(20),parameter::dirname = "hdc" ! directory name
 ! snapshot
 integer, parameter :: unitsnap = 17
 real(8), parameter :: dtsnap = 0.5d-2
-logical, parameter :: flag_binary = .false.
+logical, parameter :: flag_binary = .true.
 
 ! realtime analysis 
 integer, parameter :: unitevo =11
@@ -106,9 +106,9 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
 ! main loop
     ntime = 1
 !  t0 = omp_get_wtime()
-    mloop: do !ntime=1,ntimemax 
+    mloop: do !ntime=1,ntimemax
         dt = TimestepControl(xf, yf, Q)
-       if( time + dt > timemax ) dt = timemax - time
+        if( time + dt > timemax ) dt = timemax - time
 
 !$omp parallel default(shared)
 !$omp do collapse(2) schedule(static) private(i,j,ihy)
@@ -138,9 +138,8 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
         ntime = ntime+1
         call Output( time, .FALSE., xv, yv, Q)
 
-        print*, "ntime = ",ntime, "time = ",time, dt
-
         if( mod(ntime,10) .eq. 0 ) then 
+            print*, "ntime = ",ntime, "time = ",time, "dt =" ,dt
             call RealtimeAnalysis(xv,yv,Q,phys_evo) 
             write(unitevo,*) time, phys_evo(1:nevo) 
         endif
