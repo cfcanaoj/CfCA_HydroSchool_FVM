@@ -1,14 +1,14 @@
 module params
-real(8),parameter:: timemax=0.1d0 ! simulation end time
+real(8),parameter :: timemax = 0.1d0 ! simulation end time
 
-integer,parameter::nx=256*1       ! the number of grids in the simulation box
-integer,parameter::ngh=2            ! the number of ghost cells
-integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::is=ngh+1         ! the index of the leftmost grid
-integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
-real(8),parameter:: xmin=-0.5d0,xmax=0.5d0
+integer,parameter :: nx = 256*1       ! the number of grids in the simulation box
+integer,parameter :: ngh = 2            ! the number of ghost cells
+integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: is = ngh+1         ! the index of the leftmost grid
+integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
+real(8),parameter :: xmin = -0.5d0,xmax = 0.5d0
 
-real(8),parameter:: Bx=0.75
+real(8),parameter:: Bx = 0.75
 
 ! indices of the primitive variables
 integer, parameter :: IDN = 1
@@ -37,7 +37,7 @@ character(20),parameter::dirname="lax" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
-real(8), parameter :: dtsnap=5.0d-3
+real(8), parameter :: dtsnap = 5.0d-3
 
 ! realtime analysis 
 integer, parameter :: unitevo = 11
