@@ -5,7 +5,7 @@ real(8), parameter:: timemax=25d0 ! simulation end time
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
   
 ! coordinate 
-integer,parameter::nx=50  ! the number of grids in the simulation box
+integer,parameter::nx=256 ! the number of grids in the simulation box
 integer,parameter::ny=3*nx ! the number of grids in the simulation box
 integer,parameter::ngh=2         ! the number of ghost cells
 integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
@@ -44,7 +44,7 @@ real(8),parameter :: grav_accy=-0.1d0  ! gravitaional acceleration
 ! output 
 !  character(20),parameter::dirname="ct_openmp" ! directory name
 character(20),parameter::dirname="ct" ! directory name
-logical, parameter :: flag_binary = .false.
+logical, parameter :: flag_binary = .true.
   
 ! snapshot
 integer, parameter :: unitsnap = 17

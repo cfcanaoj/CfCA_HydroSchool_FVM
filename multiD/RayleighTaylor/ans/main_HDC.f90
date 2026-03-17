@@ -7,7 +7,7 @@ integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter :: nx = 50   ! the number of grids in the simulation box
+integer,parameter :: nx = 256  ! the number of grids in the simulation box
 integer,parameter :: ny = nx*3 ! the number of grids in the simulation box
 integer,parameter :: ngh = 2         ! the number of ghost cells
 integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
@@ -50,7 +50,7 @@ character(20),parameter::dirname="hdc" ! directory name
 ! snapshot
 integer, parameter :: unitsnap = 17
 real(8), parameter :: dtsnap   = 2.0d-1
-logical, parameter :: flag_binary = .false.
+logical, parameter :: flag_binary = .true.
 
 ! realtime analysis 
 integer, parameter :: unitevo =11
