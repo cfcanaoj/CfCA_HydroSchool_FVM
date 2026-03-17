@@ -24,8 +24,7 @@ real(8),parameter::gam=1.05d0 !! adiabatic index
 
 real(8), parameter :: Hg    = 5.0d0    ! scale hight of gravity
 real(8), parameter :: g0    = 1.47d0     ! at which TL -> TH
-!real(8), parameter :: beta0 = 1.0d0    ! plasma beta 
-real(8), parameter :: beta0 = 1.0d10    ! plasma beta 
+real(8), parameter :: beta0 = 1.0d0    ! plasma beta 
 real(8), parameter :: Ht    = 0.5d0    ! scale hight of gas temperature
 real(8), parameter :: TL    = 1.0d0/gam  ! gas temperature at the midplane
 real(8), parameter :: TH    = 25.0d0/gam ! gas temperature at upper atmospheres
@@ -54,7 +53,7 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! output 
-character(20),parameter::dirname="noB" ! directory name
+character(20),parameter::dirname="hdc" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
@@ -259,7 +258,6 @@ real(8) :: Pmid, pre, den
          Q(IVY,i,j) = 0.0d0
          Q(IVZ,i,j) = 0.0d0
          Q(IBX,i,j) = sqrt( 2.0d0*pre/beta0 )
-         Q(IBX,i,j) = 0.0d0
          Q(IBY,i,j) = 0.0d0
          Q(IBZ,i,j) = 0.0d0
          Q(IPS,i,j) = 0.0d0
