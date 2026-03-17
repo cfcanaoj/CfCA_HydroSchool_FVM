@@ -1,31 +1,30 @@
 module params
 
-real(8), parameter:: timemax=60d0 ! simulation end time
+real(8), parameter :: timemax=60d0 ! simulation end time
 
 ! option
 integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter::nx=50   ! the number of grids in the simulation box
-integer,parameter::ny=nx*2 ! the number of grids in the simulation box
-integer,parameter::ngh=2         ! the number of ghost cells
-integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::is=ngh+1         ! the index of the leftmost grid
-integer,parameter::js=ngh+1         ! the index of the leftmost grid
-integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
-integer,parameter::je=ny+ngh     ! the index of the rightmost grid
-real(8),parameter::xmin=-7.5d0*acos(-1.0d0),xmax=7.5d0*acos(-1.0d0)
-real(8),parameter::ymin=-15d0*acos(-1.0d0),ymax=15d0*acos(-1.0d0)
+integer,parameter :: nx = 50   ! the number of grids in the simulation box
+integer,parameter :: ny = nx*2 ! the number of grids in the simulation box
+integer,parameter :: ngh = 2         ! the number of ghost cells
+integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: nytot = ny+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: is = ngh+1         ! the index of the leftmost grid
+integer,parameter :: js = ngh+1         ! the index of the leftmost grid
+integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
+integer,parameter :: je = ny+ngh     ! the index of the rightmost grid
+real(8),parameter :: xmin = -7.5d0*acos(-1.0d0),xmax = 7.5d0*acos(-1.0d0)
+real(8),parameter :: ymin = -15d0*acos(-1.0d0),ymax = 15d0*acos(-1.0d0)
 
-real(8),parameter::Ccfl=0.4d0
-real(8),parameter::gam=1.05d0 !! adiabatic index
+real(8),parameter :: Ccfl = 0.4d0
+real(8),parameter :: gam = 1.05d0 !! adiabatic index
 
 real(8), parameter :: Hg    = 5.0d0    ! scale hight of gravity
 real(8), parameter :: g0    = 1.47d0     ! at which TL -> TH
-!real(8), parameter :: beta0 = 1.0d0    ! plasma beta 
-real(8), parameter :: beta0 = 1.0d10    ! plasma beta 
+real(8), parameter :: beta0 = 1.0d0    ! plasma beta 
 real(8), parameter :: Ht    = 0.5d0    ! scale hight of gas temperature
 real(8), parameter :: TL    = 1.0d0/gam  ! gas temperature at the midplane
 real(8), parameter :: TH    = 25.0d0/gam ! gas temperature at upper atmospheres
@@ -54,7 +53,7 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! output 
-character(20),parameter::dirname="noB" ! directory name
+character(20),parameter::dirname="hdc" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
@@ -115,7 +114,6 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
   open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
   ntime = 1
-!  t0 = omp_get_wtime()
   mloop: do !ntime=1,ntimemax
     dt = TimestepControl(xf, yf, Q)
     if( time + dt > timemax ) dt = timemax - time
@@ -156,17 +154,12 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
     endif
 
     if(time >= timemax) exit mloop
-!    if(ntime >= 1000) exit mloop
   enddo mloop
-!  t1 = omp_get_wtime()
-
-!  write(*,*) "max threads =", omp_get_max_threads()
-!  write(*,'(A,F10.6,A)') "elapsed = ", (t1 - t0), " s"
 
   close(unitevo)
-      call Output( time, .TRUE.,xv, yv, Q)
+  call Output( time, .TRUE.,xv, yv, Q)
 
-!      write(6,*) "program has been finished"
+   write(6,*) "program has been finished"
 !contains
 end program
 !=============================================================
@@ -259,7 +252,6 @@ real(8) :: Pmid, pre, den
          Q(IVY,i,j) = 0.0d0
          Q(IVZ,i,j) = 0.0d0
          Q(IBX,i,j) = sqrt( 2.0d0*pre/beta0 )
-         Q(IBX,i,j) = 0.0d0
          Q(IBY,i,j) = 0.0d0
          Q(IBZ,i,j) = 0.0d0
          Q(IPS,i,j) = 0.0d0
