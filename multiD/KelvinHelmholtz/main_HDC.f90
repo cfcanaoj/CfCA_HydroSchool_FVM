@@ -1,26 +1,26 @@
 module params
 
-real(8), parameter:: timemax=10d0 ! simulation end time
+real(8), parameter :: timemax=10d0 ! simulation end time
 
 ! option
 integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter::nx = 64   ! the number of grids in the simulation box
-integer,parameter::ny = nx*2 ! the number of grids in the simulation box
-integer,parameter::ngh = 2         ! the number of ghost cells
-integer,parameter::nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::nytot = ny+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::is = ngh+1         ! the index of the leftmost grid
-integer,parameter::js = ngh+1         ! the index of the leftmost grid
-integer,parameter::ie = nx+ngh     ! the index of the rightmost grid
-integer,parameter::je = ny+ngh     ! the index of the rightmost grid
-real(8),parameter::xmin = -0.5d0,xmax = 0.5d0
-real(8),parameter::ymin = -1.0d0,ymax = 1.0d0
+integer,parameter :: nx = 64   ! the number of grids in the simulation box
+integer,parameter :: ny = nx*2 ! the number of grids in the simulation box
+integer,parameter :: ngh = 2         ! the number of ghost cells
+integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: nytot = ny+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: is = ngh+1         ! the index of the leftmost grid
+integer,parameter :: js = ngh+1         ! the index of the leftmost grid
+integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
+integer,parameter :: je = ny+ngh     ! the index of the rightmost grid
+real(8),parameter :: xmin = -0.5d0,xmax = 0.5d0
+real(8),parameter :: ymin = -1.0d0,ymax = 1.0d0
 
-real(8),parameter::cfl_number = 0.4d0
-real(8),parameter::gam = 5.0d0/3.0d0 !! adiabatic index
+real(8),parameter :: cfl_number = 0.4d0
+real(8),parameter :: gam = 5.0d0/3.0d0 !! adiabatic index
 
 real(8), parameter :: alpha = 0.1d0    ! decay timescale of divergence B
 
@@ -140,18 +140,13 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
 
     print*, "ntime = ",ntime, "time = ",time, dt
 
-    if( mod(ntime,10) .eq. 0 ) then
+    if( mod(ntime,100) .eq. 0 ) then
       call RealtimeAnalysis(xv,yv,Q,phys_evo)
       write(unitevo,*) time, phys_evo(1:nevo)
     endif
 
     if(time >= timemax) exit mloop
-!    if(ntime >= 1000) exit mloop
   enddo mloop
-!  t1 = omp_get_wtime()
-
-!  write(*,*) "max threads =", omp_get_max_threads()
-!  write(*,'(A,F10.6,A)') "elapsed = ", (t1 - t0), " s"
 
   close(unitevo)
       call Output( time, .TRUE.,xv, yv, Q)
@@ -1105,15 +1100,6 @@ real(8), intent(in)  :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
 integer::i,j
 real(8) :: tot,dvy,er_divB
-
-      
-!      tot = 0.0d0
-!      do j=js,je
-!      do i=is,ie
-!          tot = tot + 1.0d0
-!      enddo
-!      enddo
-!      phys_evo(1:nevo) = tot
 
       dvy = 0.0d0
       er_divB = 0.0d0

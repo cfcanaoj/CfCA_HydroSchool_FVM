@@ -114,7 +114,6 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
   open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
   ntime = 1
-!  t0 = omp_get_wtime()
   mloop: do !ntime=1,ntimemax
     dt = TimestepControl(xf, yf, Q)
     if( time + dt > timemax ) dt = timemax - time
@@ -155,17 +154,12 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
     endif
 
     if(time >= timemax) exit mloop
-!    if(ntime >= 1000) exit mloop
   enddo mloop
-!  t1 = omp_get_wtime()
-
-!  write(*,*) "max threads =", omp_get_max_threads()
-!  write(*,'(A,F10.6,A)') "elapsed = ", (t1 - t0), " s"
 
   close(unitevo)
-      call Output( time, .TRUE.,xv, yv, Q)
+  call Output( time, .TRUE.,xv, yv, Q)
 
-!      write(6,*) "program has been finished"
+   write(6,*) "program has been finished"
 !contains
 end program
 !=============================================================

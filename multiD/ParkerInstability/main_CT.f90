@@ -114,7 +114,6 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
 
   write(6,*) "Start the simulation"
   open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
-!  t0 = omp_get_wtime()
 ! main loop
   do 
     dt = TimestepControl(xf, yf, Q, Bc)
@@ -156,14 +155,11 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
     print*, "ntime = ",ntime, "time = ",time, dt
 
     if(time >= timemax) exit 
-!    if(ntime >= 1000) exit 
   enddo 
-!      t1 = omp_get_wtime()
-!     write(*,*) "max threads =", omp_get_max_threads() !, (t1 - t0), " s"
   close(unitevo)
 
 
-!      write(6,*) "program has been finished"
+   write(6,*) "program has been finished"
 
 end program main
 !-------------------------------------------------------------------
