@@ -218,54 +218,23 @@ use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
 implicit none
 real(8), intent(in ) :: xv(nxtot), yv(nytot), yf(nytot)
 real(8), intent(out) :: Q(NVAR,nxtot,nytot)
-integer::i, j
-real(8) :: pi 
-real(8) Pf(nytot)  ! gas pressure at cell surface obtained by numerical integration
-integer :: jmid = js + (je-js+1)/2
-real(8) :: fac = 1.0d0/(1.0d0 + 1.0d0/beta0)
-real(8) :: Pmid, pre, den
+integer :: i, j
 
-      pi = acos(-1.0d0)
-
-      Pf(jmid) = 0.0d0
-      do j=jmid+1, je+ngh+1
-          Pf(j) = Pf(j-1) - g0*tanh( yv(j-1)/Hg )*fac/( GasTemperature(yv(j-1) ) )*(yf(j) - yf(j-1))
-      enddo
-      do j=1,je-jmid+ngh+1
-          Pf(jmid-j) = Pf(jmid+j)
-      enddo
-
-      Pmid = GasTemperature(0.0d0)
-      do j=1, nytot
-         Pf(j) = Pmid*exp(Pf(j))
-      enddo
-
-      do j=js-ngh,je+ngh
-         pre = 0.5d0*(Pf(j) + Pf(j+1))
-         den = pre/GasTemperature(yv(j))
+      do j=js,je
       do i=is,ie
-         Q(IDN,i,j) = den
-         Q(IPR,i,j) = pre
-         Q(IVX,i,j) = amp*sin(2.0d0*pi*xv(i)/lam)*0.5d0*( &
-                            ( tanh( (yv(j)+4.0d0)/0.5d0) - tanh( (yv(j)+1.0d0)/0.5d0 ) ) &
-                          + ( tanh( (yv(j)-4.0d0)/0.5d0) - tanh( (yv(j)-1.0d0)/0.5d0 ) ) )
+         Q(IDN,i,j) = 1.0d0
+         Q(IPR,i,j) = 1.0d0
+         Q(IVX,i,j) = 0.0d0
          Q(IVY,i,j) = 0.0d0
          Q(IVZ,i,j) = 0.0d0
-         Q(IBX,i,j) = sqrt( 2.0d0*pre/beta0 )
+         Q(IBX,i,j) = 0.0d0
          Q(IBY,i,j) = 0.0d0
          Q(IBZ,i,j) = 0.0d0
          Q(IPS,i,j) = 0.0d0
       enddo
       enddo
 
-    contains 
-        real(8) function GasTemperature( y ) 
-        real(8), intent(in) :: y 
-
-            GasTemperature = TL + 0.5d0*(TH - TL)*( tanh( (abs(y) - y0)/Ht ) + 1.0d0 )
-
-        end function GasTemperature
-
+return 
 end subroutine GenerateProblem
 !=============================================================
 ! BoundaryCondition
@@ -1142,19 +1111,17 @@ implicit none
 real(8), intent(in)  :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
 integer::i,j
-real(8) :: dby, er_divB
+real(8) :: tot 
 
-      dby = 0.0d0
-      er_divB = 0.0d0
+
+      tot = 0.0d0
       do j=js,je
       do i=is,ie
-           dby = dby + Q(IBY,i,j)**2
-           er_divB = er_divB + 0.5d0*( Q(IBX,i+1,j) - Q(IBX,i-1,j) + Q(IBY,i,j+1) - Q(IBY,i,j-1) )**2 &
-                                       /( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 )
+          tot = tot + Q(IDN,i,j)
       enddo
       enddo
-      phys_evo(1) = sqrt(dby/dble(nx*ny))
-      phys_evo(2) = sqrt(er_divB/dble(nx*ny))
+      phys_evo(1) = tot
+      phys_evo(2) = tot
       
 return
 end subroutine

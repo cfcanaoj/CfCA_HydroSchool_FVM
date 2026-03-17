@@ -211,29 +211,16 @@ implicit none
 real(8), intent(in ) :: xv(nxtot), yv(nytot)
 real(8), intent(out) :: Q(NVAR,nxtot,nytot)
 integer :: i, j
-real(8) :: pi, den, B0, rho1, rho2, dv, wid, sig
-
-    pi = dacos(-1.0d0)
-
-    rho1 = 1.0d0
-    rho2 = 1.0d0
-    dv   = 2.00d0
-    wid  = 0.05d0
-    sig  = 0.2d0
-!    B0  = dsqrt(2.0d0/3.0d0)
-    B0  = 1.0d0
 
     do j=js,je
     do i=is,ie
        Q(IDN,i,j) = 1.0d0 
-       Q(IVX,i,j)  = 0.5*dv*( dtanh( (yv(j)+0.5d0)/wid ) - dtanh( (yv(j) - 0.5d0)/wid ) - 1.0d0 )
-       Q(IVY,i,j)  = 0.001d0*dsin(2.0d0*pi*xv(i))* &
-           ( dexp( - (yv(j) + 0.5d0)**2/sig**2 ) +  &
-             dexp( - (yv(j) - 0.5d0)**2/sig**2 ) )
+       Q(IVX,i,j) = 0.0d0
+       Q(IVY,i,j) = 0.0d0
        Q(IPR,i,j) = 1.0d0
-       Q(ISC,i,j) = 0.5d0*( dtanh( (yv(j)+0.5d0)/wid ) - tanh( (yv(j)-0.5d0)/wid) )
+       Q(ISC,i,j) = 0.0d0
 
-       Q(IBX,i,j) = B0
+       Q(IBX,i,j) = 0.0d0
        Q(IBY,i,j) = 0.0d0
        Q(IBZ,i,j) = 0.0d0
        Q(IPS,i,j) = 0.0d0
@@ -1098,20 +1085,18 @@ use params, only : IDN, IVX, IVY, IVZ, IPR, ISC, IBX, IBY, IBZ, &
 implicit none
 real(8), intent(in)  :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
-integer::i,j
-real(8) :: tot,dvy,er_divB
+integer :: i,j
+real(8) :: tot 
 
-      dvy = 0.0d0
-      er_divB = 0.0d0
+
+      tot = 0.0d0
       do j=js,je
       do i=is,ie
-           dvy = dvy + Q(IVY,i,j)**2
-           er_divB = er_divB + ( Q(IBX,i+1,j) - Q(IBX,i-1,j) + Q(IBY,i,j+1) - Q(IBY,i,j-1) )**2 &
-                       /( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 )
+          tot = tot + Q(IDN,i,j)
       enddo
       enddo
-      phys_evo(1) = sqrt(dvy/dble(nx*ny))
-      phys_evo(2) = sqrt(er_divB/dble(nx*ny))
+      phys_evo(1) = tot
+      phys_evo(2) = tot
       
 return
 end subroutine

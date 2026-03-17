@@ -216,31 +216,19 @@ use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
 implicit none
 real(8), intent(in ) :: xv(nxtot), yv(nytot)
 real(8), intent(out) :: Q(NVAR,nxtot,nytot)
-integer::i, j
-real(8) :: pi, B0, den
-
-      pi = dacos(-1.0d0)
-      B0 = 0.5d0*sqrt( abs(grav_accy)/(2.0*2.0d0*pi) )
+integer :: i, j
 
       do j=js,je
       do i=is,ie
-           if( yv(j) .lt. 0.0d0 ) then
-               den = 1.0d0
-           else 
-               den = 2.0d0
-           endif
-           Q(IDN,i,j) = den
-           Q(IVX,i,j) = 0.0d0
-           Q(IVY,i,j) = 0.0d0
-           Q(IVZ,i,j) = 0.0d0
-           Q(IBX,i,j) = B0 
-           Q(IBY,i,j) = 0.0d0
-           Q(IBZ,i,j) = 0.0d0
-           Q(IPR,i,j) = 2.5d0 + grav_accy*den*yv(j)
-
-           Q(IVY,i,j)= 0.01d0/4.0d0 &
-                      *(-dcos(2.0d0*pi*(xv(i)-(xmax+xmin)/2.0d0)/(xmax-xmin))) &
-                      *(1.0+cos(2.0d0*pi*(yv(j)-(ymax+ymin)/2.0d0)/(ymax-ymin)))
+         Q(IDN,i,j) = 1.0d0
+         Q(IPR,i,j) = 1.0d0
+         Q(IVX,i,j) = 0.0d0
+         Q(IVY,i,j) = 0.0d0
+         Q(IVZ,i,j) = 0.0d0
+         Q(IBX,i,j) = 0.0d0
+         Q(IBY,i,j) = 0.0d0
+         Q(IBZ,i,j) = 0.0d0
+         Q(IPS,i,j) = 0.0d0
       enddo
       enddo
 
@@ -1117,20 +1105,18 @@ use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
 implicit none
 real(8), intent(in)  :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
-integer::i,j
-real(8) :: dvx, er_divB
+integer :: i,j
+real(8) :: tot 
 
-      dvx = 0.0d0
-      er_divB = 0.0d0
+
+      tot = 0.0d0
       do j=js,je
       do i=is,ie
-           dvx = dvx + Q(IVX,i,j)**2
-           er_divB = er_divB + 0.5d0*( Q(IBX,i+1,j) - Q(IBX,i-1,j) + Q(IBY,i,j+1) - Q(IBY,i,j-1) )**2 &
-                                       /( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 )
+          tot = tot + Q(IDN,i,j)
       enddo
       enddo
-      phys_evo(1) = sqrt(dvx/dble(nx*ny))
-      phys_evo(2) = sqrt(er_divB/dble(nx*ny))
+      phys_evo(1) = tot
+      phys_evo(2) = tot
       
 return
 end subroutine
