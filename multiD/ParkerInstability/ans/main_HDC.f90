@@ -240,7 +240,7 @@ real(8) :: Pmid, pre, den
          Pf(j) = Pmid*exp(Pf(j))
       enddo
 
-      do j=js-ngh,je+ngh
+      do j=js,je
          pre = 0.5d0*(Pf(j) + Pf(j+1))
          den = pre/GasTemperature(yv(j))
       do i=is,ie
