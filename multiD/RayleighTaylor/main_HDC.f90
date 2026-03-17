@@ -20,7 +20,7 @@ real(8),parameter :: xmin=-0.25d0,xmax=0.25d0
 real(8),parameter :: ymin=-0.75d0,ymax=0.75d0
 
 real(8),parameter :: Ccfl=0.4d0
-real(8),parameter : :gam=5.0d0/3.0d0 !! adiabatic index
+real(8),parameter :: gam=5.0d0/3.0d0 !! adiabatic index
 
 real(8), parameter :: alpha = 0.1d0    ! decay timescale of divergence B
 
