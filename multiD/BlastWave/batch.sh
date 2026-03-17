@@ -8,7 +8,7 @@
 #SBATCH -o %x_%J.out
 #SBATCH -e %x_%J.out
 #SBATCH --hint=nomultithread
-##SBATCH --reservation=hydro
+#SBATCH --reservation=hydro
 
 ### the number of threads (can be modified)
 #SBATCH --cpus-per-task=32
