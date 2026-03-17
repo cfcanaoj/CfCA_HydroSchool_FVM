@@ -50,8 +50,7 @@ real(8), parameter :: amp   = 0.01d0      ! amplitude of vx perturbation
 real(8), parameter :: lam   = 7.5d0*acos(-1.0d0) ! wavelength of vx perturbation
 
 ! output 
-!  character(20),parameter::dirname="ct_openmp" ! directory name
-character(20),parameter::dirname="ct_new" ! directory name
+character(20),parameter::dirname="ct" ! directory name
 logical, parameter :: flag_binary = .false.
   
 ! snapshot
