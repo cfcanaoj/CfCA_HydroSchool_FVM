@@ -139,7 +139,7 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
         call Output( time, .FALSE., xv, yv, Q)
 
         if( mod(ntime,10) .eq. 0 ) then 
-            print*, "ntime = ",ntime, "time = ",time, "dt =" ,dt
+            write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
             call RealtimeAnalysis(xv,yv,Q,phys_evo) 
             write(unitevo,*) time, phys_evo(1:nevo) 
         endif
