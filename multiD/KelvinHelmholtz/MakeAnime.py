@@ -49,103 +49,29 @@ def read_data(filetype, dirname, step):
     else:
         raise ValueError("filetype should be ascii or binary")
 
-    data_dict["Bpre"] = 0.5*(data_dict["Bx"]**2 + data_dict["By"]**2 + data_dict["Bz"]**2)
-    data_dict["Ekin"] = 0.5*data_dict['rho']*(data_dict["vx"]**2 + data_dict["vy"]**2 + data_dict["vz"]**2)
-    data_dict["beta"] = data_dict["pre"]/data_dict["Bpre"]
-
     return x, y, time, data_dict
 
 
-def get_norm_from_values(vals, scale_type, vmin_manual=None, vmax_manual=None):
-    vals = vals[np.isfinite(vals)]
-
-    if vals.size == 0:
-        raise ValueError("no finite values found")
-
-    if scale_type == "linear":
-        vmin = np.nanmin(vals) if vmin_manual is None else vmin_manual
-        vmax = np.nanmax(vals) if vmax_manual is None else vmax_manual
-
-        if not np.isfinite(vmin) or not np.isfinite(vmax):
-            raise ValueError("vmin/vmax must be finite")
-        if vmin >= vmax:
-            raise ValueError("vmin must be smaller than vmax")
-
-        return Normalize(vmin=vmin, vmax=vmax)
-
-    elif scale_type == "log":
-        positive_vals = vals[vals > 0.0]
-        if positive_vals.size == 0:
-            raise ValueError("log scale cannot be used because there are no positive values")
-
-        vmin = np.nanmin(positive_vals) if vmin_manual is None else vmin_manual
-        vmax = np.nanmax(positive_vals) if vmax_manual is None else vmax_manual
-
-        if not np.isfinite(vmin) or not np.isfinite(vmax):
-            raise ValueError("vmin/vmax must be finite")
-        if vmin <= 0.0 or vmax <= 0.0:
-            raise ValueError("for log scale, vmin and vmax must be positive")
-        if vmin >= vmax:
-            raise ValueError("vmin must be smaller than vmax")
-
-        return LogNorm(vmin=vmin, vmax=vmax)
-
-    else:
-        raise ValueError("scale_type should be linear or log")
-
-
-def collect_sampled_values(filetype, step_s, step_e, dirnames, varname):
-    step_m = (step_s + step_e) // 2
-    steps_sample = sorted(set([step_s, step_m, step_e]))
-
-    dirname_ref = dirnames[0]
-    print("sampling steps for color range:", steps_sample)
-    print("reference directory for color range:", dirname_ref)
-
-    vals_list = []
-
-    for step in steps_sample:
-        _, _, _, data = read_data(filetype, dirname_ref, step)
-
-        if varname not in data:
-            raise ValueError(
-                f"variable '{varname}' is not available in {dirname_ref} at step {step}"
-            )
-
-        vals_list.append(data[varname].ravel())
-
-    return np.concatenate(vals_list)
-
 parser = argparse.ArgumentParser(
     description="Create a comparison movie from multiple simulation outputs.",
-    usage="python3 MakeAnime.py [ascii|binary] [step_s] [step_e] [varname] [linear|log] [dir1] [dir2] ... [-h] [--vmin VMIN] [--vmax VMAX] [--interval INTERVAL]",
+    usage="python3 MakeAnime.py [ascii|binary] [step_s] [step_e] [dir1] [dir2] ... [-h] [--vmin VMIN] [--vmax VMAX] [--interval INTERVAL]",
     epilog=(
         "Example:\n"
-        "  python3 MakeAnime.py ascii 0 20 rho linear ct hdc\n"
-        "  python3 MakeAnime.py binary 10 50 beta log ct hdc --vmin 1e-2 --vmax 1e2"
+        "  python3 MakeAnime.py ascii 0 20 ct hdc\n"
     ),
     formatter_class=argparse.RawTextHelpFormatter
 )
 parser.add_argument("filetype", choices=["ascii", "binary"],help="input file format")
 parser.add_argument("step_s", type=int, help="starting step number")
 parser.add_argument("step_e", type=int, help="ending step number")
-parser.add_argument("varname", type=str, help="variable to plot (rho, vx, vy, vz, P, Bx, By, Bz, Bpre, Ekin, beta)")
-parser.add_argument("scale_type", choices=["linear", "log"], help="color scale type")
 parser.add_argument("dirnames", nargs="+", help="one or more directories containing snapshot files")
-parser.add_argument("--vmin", type=float, default=None, help="(optional) manual minimum value for the color scale")
-parser.add_argument("--vmax", type=float, default=None, help="(optional) manual maximum value for the color scale")
-parser.add_argument("--interval", type=int, default=200, help="(optional) frame interval in milliseconds")
 args = parser.parse_args()
 
 filetype    = args.filetype
 step_s      = args.step_s
 step_e      = args.step_e
-varname     = args.varname
-scale_type  = args.scale_type
+varname     = "sca"
 dirnames    = args.dirnames
-vmin_manual = args.vmin
-vmax_manual = args.vmax
-interval    = args.interval
 
 varlabel_dict = {
     "rho":  "density",
@@ -157,25 +83,11 @@ varlabel_dict = {
     "Bx":   "magnetic field x",
     "By":   "magnetic field y",
     "Bz":   "magnetic field z",
-    "Bpre": "magnetic pressure",
-    "Ekin": "kinetic energy",
-    "beta": "plasma beta",
 }
 
 
 if step_e < step_s:
     raise ValueError("step_e must be >= step_s")
-
-if (vmin_manual is not None) and (vmax_manual is not None):
-    norm = get_norm_from_values(
-        np.array([vmin_manual, vmax_manual]),
-        scale_type,
-        vmin_manual,
-        vmax_manual
-    )
-else:
-    sample_vals = collect_sampled_values(filetype, step_s, step_e, dirnames, varname)
-    norm = get_norm_from_values(sample_vals, scale_type, vmin_manual, vmax_manual)
 
 # 最初のフレームで座標範囲を決める
 x0, y0, time0, data0 = read_data(filetype, dirnames[0], step_s)
@@ -223,13 +135,8 @@ for istep in range(step_s, step_e + 1):
         x, y, time, data = read_data(filetype, dirname, istep)
         times.append(time)
 
-        im = grid[i].imshow(
-            data[varname],
-            extent=(xmin, xmax, ymin, ymax),
-            origin="lower",
-            norm=norm,
-            animated=True,
-        )
+        im = grid[i].imshow( data[varname], extent=(xmin, xmax, ymin, ymax), origin="lower", vmin=0, vmax=1, \
+            animated=True)
         artists.append(im)
 
     time_text = fig.text(
@@ -246,7 +153,7 @@ for istep in range(step_s, step_e + 1):
 
     graph_list.append(artists)
 
-ani = animation.ArtistAnimation(fig, graph_list, interval=interval)
+ani = animation.ArtistAnimation(fig, graph_list, interval=200)
 
 if len(dirnames) > 1:
     joined = "_".join(os.path.basename(os.path.normpath(d)) for d in dirnames)

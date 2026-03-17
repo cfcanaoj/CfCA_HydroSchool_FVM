@@ -48,54 +48,8 @@ def read_data(filetype, dirname, step):
     else:
         raise ValueError("filetype should be 'ascii' or 'binary'")
 
-    data_dict["Bpre"] = 0.5*( data_dict["Bx"]**2 + data_dict["By"]**2 + data_dict["Bz"]**2)
-    data_dict["Ekin"] = 0.5*( data_dict["vx"]**2 + data_dict["vy"]**2 + data_dict["vz"]**2)
-    data_dict["beta"] = data_dict["pre"]/data_dict["Bpre"]
     return x, y, time, data_dict
 
-def get_norm(results, varname, scale_type, vmin_manual=None, vmax_manual=None):
-    vals = np.concatenate([r["data"][varname].ravel() for r in results])
-    vals = vals[np.isfinite(vals)]
-
-    if vals.size == 0:
-        raise ValueError("no finite values found")
-
-    if scale_type == "linear":
-        vmin = np.nanmin(vals) if vmin_manual is None else vmin_manual
-        vmax = np.nanmax(vals) if vmax_manual is None else vmax_manual
-
-        if not np.isfinite(vmin) or not np.isfinite(vmax):
-            raise ValueError("vmin/vmax must be finite")
-
-        if vmin >= vmax:
-            raise ValueError("vmin must be smaller than vmax")
-
-        return Normalize(vmin=vmin, vmax=vmax)
-
-    elif scale_type == "log":
-        positive_vals = vals[vals > 0.0]
-
-        if positive_vals.size == 0:
-            raise ValueError(
-                f"log scale cannot be used for '{varname}' because there are no positive values"
-            )
-
-        vmin = np.nanmin(positive_vals) if vmin_manual is None else vmin_manual
-        vmax = np.nanmax(positive_vals) if vmax_manual is None else vmax_manual
-
-        if not np.isfinite(vmin) or not np.isfinite(vmax):
-            raise ValueError("vmin/vmax must be finite")
-
-        if vmin <= 0.0 or vmax <= 0.0:
-            raise ValueError("for log scale, vmin and vmax must be positive")
-
-        if vmin >= vmax:
-            raise ValueError("vmin must be smaller than vmax")
-
-        return LogNorm(vmin=vmin, vmax=vmax)
-
-    else:
-        raise ValueError("scale_type should be 'linear' or 'log'")
 
 def vecpot(x, y, Bx, By):
     Az = np.zeros_like(By)
@@ -110,30 +64,22 @@ def vecpot(x, y, Bx, By):
 
 parser = argparse.ArgumentParser(
     description="Create a comparison shapshot from multiple simulation outputs.",
-    usage="python3 MakeCompare.py [ascii|binary] [step] [varname] [linear|log] [dir1] [dir2] ... [-h] [--vmin VMIN] [--vmax VMAX]",
+    usage="python3 MakeCompare.py [ascii|binary] [step] [dir1] [dir2] ... [-h] ",
     epilog=(
         "Example:\n"
-        "  python3 MakeCompare.py ascii 20 rho linear ct hdc\n"
-        "  python3 MakeCompare.py binary 50 beta log ct hdc --vmin 1e-2 --vmax 1e2"
+        "  python3 MakeCompare.py ascii 20 ct hdc\n"
     ),
     formatter_class=argparse.RawTextHelpFormatter
 )
 parser.add_argument("filetype", choices=["ascii", "binary"],help="input file format")
 parser.add_argument("step", type=int, help="step number")
-parser.add_argument("varname", type=str, help="variable to plot (rho, vx, vy, vz, P, Bx, By, Bz, Bpre, Ekin, beta)")
-parser.add_argument("scale_type", choices=["linear", "log"], help="color scale type")
 parser.add_argument("dirnames", nargs="+", help="one or more directories containing snapshot files")
-parser.add_argument("--vmin", type=float, default=None, help="(optional) manual minimum value for the color scale")
-parser.add_argument("--vmax", type=float, default=None, help="(optional) manual maximum value for the color scale")
 args = parser.parse_args()
 
 filetype   = args.filetype
 step       = args.step
-varname    = args.varname
-scale_type = args.scale_type
 dirnames   = args.dirnames
-vmin_manual = args.vmin
-vmax_manual = args.vmax
+varname  = "rho"
 
 varlabel_dict = {
     "rho":  "density",
@@ -144,24 +90,15 @@ varlabel_dict = {
     "Bx":   "magnetic field x",
     "By":   "magnetic field y",
     "Bz":   "magnetic field z",
-    "Bpre": "magnetic pressure",
-    "Ekin": "kinetic energy",
-    "beta": "plasma beta",
 }
 
 varlabel = varlabel_dict.get(varname, varname)
-
 
 results = []
 times = []
 
 for dirname in dirnames:
     x, y, time, data = read_data(filetype, dirname, step)
-
-    if varname not in data:
-        print(f"error: variable '{varname}' is not available in {dirname}")
-        print("available variables:", ", ".join(data.keys()))
-        sys.exit(1)
 
     Az = vecpot(x, y, data["Bx"], data["By"])
     results.append({
@@ -208,8 +145,6 @@ grid = ImageGrid(
     cbar_pad=0.10,
 )
 
-norm = get_norm(results, varname, scale_type, vmin_manual, vmax_manual)
-
 im = None
 for ax, r in zip(grid, results):
     x = r["x"]
@@ -217,7 +152,7 @@ for ax, r in zip(grid, results):
     Az = r["Az"]
     data = r["data"]
 
-    im = ax.imshow( data[varname], extent=(xmin,xmax,ymin,ymax), origin="lower", norm=norm)
+    im = ax.imshow( data[varname], extent=(xmin,xmax,ymin,ymax), origin="lower", vmin=0, vmax=4)
     ax.contour( x, y, Az, linestyles="solid", levels=20, colors="white", linewidths=0.7)
 
     ax.set_xlim(xmin, xmax)
