@@ -137,7 +137,7 @@ real(8) :: t0, t1
     if( mod(ntime,10) .eq. 0 ) then 
         write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
         call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
-        write(unitevo,*) time, phys_evo(1:nevo)
+        write(unitevo,'(*(1X,ES24.16E3))') time, phys_evo(1:nevo)
     endif
 
     if(time >= timemax) exit 

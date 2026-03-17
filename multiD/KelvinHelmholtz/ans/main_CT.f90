@@ -5,7 +5,7 @@ real(8),parameter:: timemax = 10.0d0 ! simulation end time
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
   
 ! coordinate 
-integer,parameter::nx = 64   ! the number of grids in the simulation box
+integer,parameter::nx = 512  ! the number of grids in the simulation box
 integer,parameter::ny = 2*nx ! the number of grids in the simulation box
 integer,parameter::ngh = 2         ! the number of ghost cells
 integer,parameter::nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
@@ -42,7 +42,7 @@ real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
 
 ! output 
 character(20),parameter::dirname="ct" ! directory name
-logical, parameter :: flag_binary = .false.
+logical, parameter :: flag_binary = .true.
   
 ! snapshot
 integer, parameter :: unitsnap = 17
@@ -136,7 +136,7 @@ real(8) :: t0, t1
     if( mod(ntime,10) .eq. 0 ) then 
         write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
         call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
-        write(unitevo,*) time, phys_evo(1:nevo)
+        write(unitevo,'(*(1X,ES24.16E3))') time, phys_evo(1:nevo)
     endif
     call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
 
