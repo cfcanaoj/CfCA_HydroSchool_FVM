@@ -1,57 +1,57 @@
 module params
-  real(8),parameter:: timemax=10.0d0 ! simulation end time
-    
-  ! option
-  integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
-    
-  ! coordinate 
-  integer,parameter::nx=64   ! the number of grids in the simulation box
-  integer,parameter::ny=2*nx ! the number of grids in the simulation box
-  integer,parameter::ngh=2         ! the number of ghost cells
-  integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-  integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-  integer,parameter::is=ngh+1         ! the index of the leftmost grid
-  integer,parameter::js=ngh+1         ! the index of the leftmost grid
-  integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
-  integer,parameter::je=ny+ngh     ! the index of the rightmost grid
-  real(8),parameter::xmin=-0.5d0,xmax=0.5d0
-  real(8),parameter::ymin=-1.0d0,ymax=1.0d0
-    
-  real(8),parameter::Ccfl=0.4d0
-    
-  ! indices of the conservative variables
-  integer, parameter :: IDN = 1
-  integer, parameter :: IMX = 2
-  integer, parameter :: IMY = 3
-  integer, parameter :: IMZ = 4
-  integer, parameter :: IPR = 5
-  integer, parameter :: ISC = 6
-  integer, parameter :: IBX = 7
-  integer, parameter :: IBY = 8
-  integer, parameter :: IBZ = 9
-  integer, parameter :: NVAR = 6
-  integer, parameter :: NFLX = 9
-    
-  ! indices of the primitive variables
-  integer, parameter :: IVX = 2
-  integer, parameter :: IVY = 3
-  integer, parameter :: IVZ = 4
-  integer, parameter :: IEN = 5
+real(8),parameter:: timemax = 10.0d0 ! simulation end time
   
-  real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
+! option
+integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
+  
+! coordinate 
+integer,parameter::nx = 64   ! the number of grids in the simulation box
+integer,parameter::ny = 2*nx ! the number of grids in the simulation box
+integer,parameter::ngh = 2         ! the number of ghost cells
+integer,parameter::nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter::nytot = ny+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter::is = ngh+1         ! the index of the leftmost grid
+integer,parameter::js = ngh+1         ! the index of the leftmost grid
+integer,parameter::ie = nx+ngh     ! the index of the rightmost grid
+integer,parameter::je = ny+ngh     ! the index of the rightmost grid
+real(8),parameter::xmin = -0.5d0,xmax = 0.5d0
+real(8),parameter::ymin = -1.0d0,ymax = 1.0d0
+  
+real(8),parameter::cfl_number = 0.4d0
+  
+! indices of the conservative variables
+integer, parameter :: IDN = 1
+integer, parameter :: IMX = 2
+integer, parameter :: IMY = 3
+integer, parameter :: IMZ = 4
+integer, parameter :: IPR = 5
+integer, parameter :: ISC = 6
+integer, parameter :: IBX = 7
+integer, parameter :: IBY = 8
+integer, parameter :: IBZ = 9
+integer, parameter :: NVAR = 6
+integer, parameter :: NFLX = 9
+  
+! indices of the primitive variables
+integer, parameter :: IVX = 2
+integer, parameter :: IVY = 3
+integer, parameter :: IVZ = 4
+integer, parameter :: IEN = 5
 
-  ! output 
-  character(20),parameter::dirname="ct" ! directory name
-  logical, parameter :: flag_binary = .false.
-    
-  ! snapshot
-  integer, parameter :: unitsnap = 17
-  real(8), parameter:: dtsnap=2.0d-1
-    
-  ! realtime analysis 
-  integer, parameter :: nevo = 3
-  integer, parameter :: unitevo =11
-  integer, parameter :: unitbin =13
+real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
+
+! output 
+character(20),parameter::dirname="ct" ! directory name
+logical, parameter :: flag_binary = .false.
+  
+! snapshot
+integer, parameter :: unitsnap = 17
+real(8), parameter:: dtsnap=2.0d-1
+  
+! realtime analysis 
+integer, parameter :: nevo = 3
+integer, parameter :: unitevo =11
+integer, parameter :: unitbin =13
 end module
 
 program main
@@ -431,7 +431,7 @@ end subroutine CellCenterMagneticField
 !-------------------------------------------------------------------
 real(8) function TimestepControl(xf, yf, Q, Bc )
 use params, only : nxtot,nytot,NVAR,is, ie, js, je, &
-                   IDN, IVX, IVY, IVZ, IPR, gam, Ccfl
+                   IDN, IVX, IVY, IVZ, IPR, gam, cfl_number
 implicit none
 real(8), intent(in) :: xf(nxtot), yf(nytot)
 real(8), intent(in) :: Q(NVAR,nxtot,nytot), Bc(3,nxtot,nytot)
@@ -454,7 +454,7 @@ integer::i,j
         enddo
 !$omp end parallel do
 
-        TimestepControl = Ccfl* dtmin
+        TimestepControl = cfl_number* dtmin
 
 return
 end function TimestepControl

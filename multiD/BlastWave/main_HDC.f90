@@ -1,26 +1,25 @@
 module params
-
-real(8), parameter:: timemax=0.15d0 ! simulation end time
+real(8), parameter:: timemax = 0.15d0 ! simulation end time
 
 ! option
 integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter::nx=128  ! the number of grids in the simulation box
-integer,parameter::ny=128  ! the number of grids in the simulation box
-integer,parameter::ngh=2         ! the number of ghost cells
-integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::is=ngh+1         ! the index of the leftmost grid
-integer,parameter::js=ngh+1         ! the index of the leftmost grid
-integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
-integer,parameter::je=ny+ngh     ! the index of the rightmost grid
-real(8),parameter::xmin=-0.5d0,xmax=0.5d0
-real(8),parameter::ymin=-0.5d0,ymax=0.5d0
+integer,parameter :: nx = 128  ! the number of grids in the simulation box
+integer,parameter :: ny = 128  ! the number of grids in the simulation box
+integer,parameter :: ngh = 2         ! the number of ghost cells
+integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: nytot = ny+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: is = ngh+1         ! the index of the leftmost grid
+integer,parameter :: js = ngh+1         ! the index of the leftmost grid
+integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
+integer,parameter :: je = ny+ngh     ! the index of the rightmost grid
+real(8),parameter :: xmin = -0.5d0,xmax = 0.5d0
+real(8),parameter :: ymin = -0.5d0,ymax = 0.5d0
 
-real(8),parameter::Ccfl=0.4d0
-real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
+real(8),parameter :: cfl_number = 0.4d0
+real(8),parameter :: gam = 5.0d0/3.0d0 !! adiabatic index
 
 real(8), parameter :: alpha = 0.1d0    ! decay timescale of divergence B
 
@@ -43,11 +42,11 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! output 
-character(20),parameter::dirname="hdc_noopt" ! directory name
+character(20),parameter::dirname = "hdc" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
-real(8), parameter:: dtsnap=0.5d-2
+real(8), parameter :: dtsnap = 0.5d-2
 logical, parameter :: flag_binary = .false.
 
 ! realtime analysis 
@@ -56,6 +55,8 @@ integer, parameter :: nevo = 2
 
 end module
 
+!=====================================================================
+!=====================================================================
 program main
 !$ use omp_lib
 use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
@@ -100,62 +101,57 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
   call Output( time, .TRUE., xv, yv, Q )
 
 
-  write(6,*) "Start the simulation"
-  open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
+    write(6,*) "Start the simulation"
+    open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
-  ntime = 1
+    ntime = 1
 !  t0 = omp_get_wtime()
-  mloop: do !ntime=1,ntimemax
-    dt = TimestepControl(xf, yf, Q)
-    if( time + dt > timemax ) dt = timemax - time
+    mloop: do !ntime=1,ntimemax 
+        dt = TimestepControl(xf, yf, Q)
+       if( time + dt > timemax ) dt = timemax - time
 
 !$omp parallel default(shared)
 !$omp do collapse(2) schedule(static) private(i,j,ihy)
-    do j=1,nytot
-    do i=1,nxtot
-    do ihy=1,NVAR 
-      Uo(ihy,i,j) = U(ihy,i,j)
-    end do
-    end do
-    end do
+        do j=1,nytot 
+        do i=1,nxtot 
+        do ihy=1,NVAR 
+            Uo(ihy,i,j) = U(ihy,i,j) 
+        end do 
+        end do 
+        end do
 !$omp end do
 
-    call NumericalFlux( dt, xf, yf, Q, F, G )
-    call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Uo, U )
-    call SrcTerms( 0.5d0*dt, dt, Q, U)
-    call Consv2Prim( U, Q )
-    call BoundaryCondition(Q )
+        call NumericalFlux( dt, xf, yf, Q, F, G )
+        call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Uo, U )
+        call SrcTerms( 0.5d0*dt, dt, Q, U)
+        call Consv2Prim( U, Q )
+        call BoundaryCondition(Q )
 
-    call NumericalFlux( dt, xf, yf, Q, F, G )
-    call UpdateConsv( dt, xf, yf, F, G, Uo, U )
-    call SrcTerms( dt, dt, Q, U)
-    call Consv2Prim( U, Q )
-    call BoundaryCondition( Q )
+        call NumericalFlux( dt, xf, yf, Q, F, G )
+        call UpdateConsv( dt, xf, yf, F, G, Uo, U )
+        call SrcTerms( dt, dt, Q, U)
+        call Consv2Prim( U, Q )
+        call BoundaryCondition( Q )
 !$omp end parallel
 
-    time=time+dt
-    ntime = ntime+1
-    call Output( time, .FALSE., xv, yv, Q)
+        time = time+dt
+        ntime = ntime+1
+        call Output( time, .FALSE., xv, yv, Q)
 
-    print*, "ntime = ",ntime, "time = ",time, dt
+        print*, "ntime = ",ntime, "time = ",time, dt
 
-    if( mod(ntime,10) .eq. 0 ) then
-      call RealtimeAnalysis(xv,yv,Q,phys_evo)
-      write(unitevo,*) time, phys_evo(1:nevo)
-    endif
+        if( mod(ntime,10) .eq. 0 ) then 
+            call RealtimeAnalysis(xv,yv,Q,phys_evo) 
+            write(unitevo,*) time, phys_evo(1:nevo) 
+        endif
 
-    if(time >= timemax) exit mloop
-!    if(ntime >= 1000) exit mloop
-  enddo mloop
-!  t1 = omp_get_wtime()
+       if(time >= timemax) exit mloop
+    enddo mloop
+    close(unitevo)
 
-!  write(*,*) "max threads =", omp_get_max_threads()
-!  write(*,'(A,F10.6,A)') "elapsed = ", (t1 - t0), " s"
+    call Output( time, .TRUE.,xv, yv, Q)
 
-  close(unitevo)
-      call Output( time, .TRUE.,xv, yv, Q)
-
-!      write(6,*) "program has been finished"
+    write(6,*) "program has been finished"
 !contains
 end program
 !=============================================================
@@ -254,26 +250,26 @@ integer :: i,j,ihy
 
 ! Fill x-direction ghost zones (periodic)
 !$omp do collapse(2) schedule(static) private(i,j,ihy)
-do j=1,nytot-1
-do i=1,ngh
-  do ihy=1,NVAR
-    Q(ihy,is-i,j) = Q(ihy,ie+1-i,j)
-    Q(ihy,ie+i,j) = Q(ihy,is+i-1,j)
-  end do
-end do
-end do
+    do j=1,nytot-1
+    do i=1,ngh 
+        do ihy=1,NVAR 
+            Q(ihy,is-i,j) = Q(ihy,ie+1-i,j) 
+            Q(ihy,ie+i,j) = Q(ihy,is+i-1,j) 
+        end do
+    end do
+    end do
 !$omp end do
 
 ! Fill y-direction ghost zones (periodic)
 !$omp do collapse(2) schedule(static) private(i,j,ihy)
-do j=1,ngh
-do i=1,nxtot-1
-  do ihy=1,NVAR
-    Q(ihy,i,js-j) = Q(ihy,i,je+1-j)
-    Q(ihy,i,je+j) = Q(ihy,i,js+j-1)
-  end do
-end do
-end do
+    do j=1,ngh
+    do i=1,nxtot-1
+        do ihy=1,NVAR
+            Q(ihy,i,js-j) = Q(ihy,i,je+1-j)
+            Q(ihy,i,je+j) = Q(ihy,i,js+j-1)
+        end do
+    end do
+    end do
 !$omp end do
 
 return
@@ -300,21 +296,21 @@ real(8), intent(out) :: U(NVAR,nxtot,nytot)
 integer :: i,j
 
 !$omp do collapse(2) schedule(static) private(i,j)
-do j=js,je
-do i=is,ie
-  U(IDN,i,j) = Q(IDN,i,j)
-  U(IMX,i,j) = Q(IDN,i,j)*Q(IVX,i,j)
-  U(IMY,i,j) = Q(IDN,i,j)*Q(IVY,i,j)
-  U(IMZ,i,j) = Q(IDN,i,j)*Q(IVZ,i,j)
-  U(IEN,i,j) = 0.5d0*Q(IDN,i,j)*( Q(IVX,i,j)**2 + Q(IVY,i,j)**2 + Q(IVZ,i,j)**2 ) &
-             + 0.5d0*( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 + Q(IBZ,i,j)**2 ) &
-             + Q(IPR,i,j)/(gam - 1.0d0)
-  U(IBX,i,j) = Q(IBX,i,j)
-  U(IBY,i,j) = Q(IBY,i,j)
-  U(IBZ,i,j) = Q(IBZ,i,j)
-  U(IPS,i,j) = Q(IPS,i,j)
-end do
-end do
+    do j=js,je
+    do i=is,ie
+        U(IDN,i,j) = Q(IDN,i,j)
+        U(IMX,i,j) = Q(IDN,i,j)*Q(IVX,i,j)
+        U(IMY,i,j) = Q(IDN,i,j)*Q(IVY,i,j)
+        U(IMZ,i,j) = Q(IDN,i,j)*Q(IVZ,i,j)
+        U(IEN,i,j) = 0.5d0*Q(IDN,i,j)*( Q(IVX,i,j)**2 + Q(IVY,i,j)**2 + Q(IVZ,i,j)**2 ) &
+                   + 0.5d0*( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 + Q(IBZ,i,j)**2 ) &
+                   + Q(IPR,i,j)/(gam - 1.0d0)
+        U(IBX,i,j) = Q(IBX,i,j)
+        U(IBY,i,j) = Q(IBY,i,j)
+        U(IBZ,i,j) = Q(IBZ,i,j)
+        U(IPS,i,j) = Q(IPS,i,j)
+    end do
+    end do
 !$omp end do
 
 return
@@ -342,22 +338,22 @@ integer :: i,j
 real(8) :: inv_d
 
 !$omp do collapse(2) schedule(static) private(i,j,inv_d)
-do j=js,je
-do i=is,ie
-  Q(IDN,i,j) = U(IDN,i,j)
-  inv_d = 1.0d0/U(IDN,i,j)
-  Q(IVX,i,j) = U(IMX,i,j)*inv_d
-  Q(IVY,i,j) = U(IMY,i,j)*inv_d
-  Q(IVZ,i,j) = U(IMZ,i,j)*inv_d
-  Q(IPR,i,j) = ( U(IEN,i,j) &
-               - 0.5d0*(U(IMX,i,j)**2 + U(IMY,i,j)**2 + U(IMZ,i,j)**2)*inv_d  &
-               - 0.5d0*(U(IBX,i,j)**2 + U(IBY,i,j)**2 + U(IBZ,i,j)**2) )*(gam-1.0d0)
-  Q(IBX,i,j) = U(IBX,i,j)
-  Q(IBY,i,j) = U(IBY,i,j)
-  Q(IBZ,i,j) = U(IBZ,i,j)
-  Q(IPS,i,j) = U(IPS,i,j)
-end do
-end do
+    do j=js,je
+    do i=is,ie
+        Q(IDN,i,j) = U(IDN,i,j)
+        inv_d = 1.0d0/U(IDN,i,j)
+        Q(IVX,i,j) = U(IMX,i,j)*inv_d
+        Q(IVY,i,j) = U(IMY,i,j)*inv_d
+        Q(IVZ,i,j) = U(IMZ,i,j)*inv_d
+        Q(IPR,i,j) = ( U(IEN,i,j) &
+                     - 0.5d0*(U(IMX,i,j)**2 + U(IMY,i,j)**2 + U(IMZ,i,j)**2)*inv_d  &
+                     - 0.5d0*(U(IBX,i,j)**2 + U(IBY,i,j)**2 + U(IBZ,i,j)**2) )*(gam-1.0d0)
+        Q(IBX,i,j) = U(IBX,i,j)
+        Q(IBY,i,j) = U(IBY,i,j)
+        Q(IBZ,i,j) = U(IBZ,i,j)
+        Q(IPS,i,j) = U(IPS,i,j)
+    end do
+    end do
 !$omp end do
 
 return
@@ -381,7 +377,7 @@ end subroutine Consv2Prim
 !=============================================================
 real(8) function TimestepControl(xf, yf, Q)
 use params, only : IDN, IVX, IVY, IPR, IBX, IBY, IBZ, NVAR, nxtot, nytot, &
-                   is, ie, js, je, Ccfl, gam
+                   is, ie, js, je, cfl_number, gam
 implicit none
 real(8), intent(in) :: xf(nxtot), yf(nytot), Q(NVAR,nxtot,nytot)
 real(8)::dtl1
@@ -395,15 +391,15 @@ integer::i,j
 !$omp shared(xf,yf,Q) private(dtl1,dtl2,cf) reduction(min:dtmin)
       do j=js,je
       do i=is,ie
-         cf = dsqrt( (gam*Q(IPR,i,j) + Q(IBX,i,j)**2 + Q(IBY,i,j)**2 + Q(IBZ,i,j)**2)/Q(IDN,i,j))
-         dtl1 =(xf(i+1)-xf(i))/(abs(Q(IVX,i,j)) + cf)
-         dtl2 =(yf(j+1)-yf(j))/(abs(Q(IVY,i,j)) + cf)
-         dtmin = min(dtl1,dtl2,dtmin)
+          cf = dsqrt( (gam*Q(IPR,i,j) + Q(IBX,i,j)**2 + Q(IBY,i,j)**2 + Q(IBZ,i,j)**2)/Q(IDN,i,j))
+          dtl1 =(xf(i+1)-xf(i))/(abs(Q(IVX,i,j)) + cf)
+          dtl2 =(yf(j+1)-yf(j))/(abs(Q(IVY,i,j)) + cf)
+          dtmin = min(dtl1,dtl2,dtmin)
       enddo
       enddo
 !$omp end parallel do
 
-      TimestepControl = Ccfl* dtmin
+      TimestepControl = cfl_number* dtmin
 
 return
 end function TimestepControl
@@ -438,7 +434,7 @@ end subroutine vanLeer
 !     2) Solve an approximate Riemann problem to obtain the interface fluxes.
 !=============================================================
 subroutine NumericalFlux( dt, xf, yf, Q, F, G )
-use params, only : nxtot, nytot, NVAR, is, ie, js, je, Ccfl, flag_flux
+use params, only : nxtot, nytot, NVAR, is, ie, js, je, cfl_number, flag_flux
 implicit none
 real(8), intent(in) :: dt
 real(8), intent(in) :: xf(nxtot), yf(nytot)
@@ -453,69 +449,70 @@ integer :: i,j
 !   a private copy per thread when this subroutine is called inside a single
 !   long-lived OpenMP parallel region.
 real(8), save :: Ql(NVAR,nxtot,nytot), Qr(NVAR,nxtot,nytot)
-
 real(8) :: flx(NVAR)
 real(8) :: dQm(NVAR), dQp(NVAR), dQmon(NVAR)
 real(8) :: ch
 
-ch = 1.0d0*Ccfl*min( xf(is+1) - xf(is), yf(js+1) - yf(js ) )/dt
+ch = 1.0d0*cfl_number*min( xf(is+1) - xf(is), yf(js+1) - yf(js ) )/dt
 
 ! ---- x-direction: reconstruction ----
 !$omp do collapse(2) schedule(static) private(i,j,flx,dQp,dQm,dQmon)
-do j=js,je
-do i=is-1,ie+1
-  dQp(1:NVAR) = Q(1:NVAR,i+1,j) - Q(1:NVAR,i  ,j)
-  dQm(1:NVAR) = Q(1:NVAR,i  ,j) - Q(1:NVAR,i-1,j)
-
-  call vanLeer(NVAR, dQp, dQm, dQmon)
-
-  ! Ql(i,j) --> W_(i-1/2,j)
-  ! Qr(i,j) --> W_(i-1/2,j)
-  Ql(1:NVAR,i+1,j) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
-  Qr(1:NVAR,i  ,j) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
-end do
-end do
+    do j=js,je
+    do i=is-1,ie+1
+        dQp(1:NVAR) = Q(1:NVAR,i+1,j) - Q(1:NVAR,i  ,j)
+        dQm(1:NVAR) = Q(1:NVAR,i  ,j) - Q(1:NVAR,i-1,j)
+      
+        call vanLeer(NVAR, dQp, dQm, dQmon)
+      
+        ! Ql(i,j) --> W_(i-1/2,j)
+        ! Qr(i,j) --> W_(i-1/2,j)
+        Ql(1:NVAR,i+1,j) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
+        Qr(1:NVAR,i  ,j) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
+    end do
+    end do
 !$omp end do
 
 ! ---- x-direction: Riemann solver ----
 !$omp do collapse(2) schedule(static) private(i,j,flx)
-do j=js,je
-do i=is,ie+1
-  if (flag_flux == 1) then
-    call HLL (1, ch, Ql(:,i,j), Qr(:,i,j), flx)
-  else
-    call HLLD(1, ch, Ql(:,i,j), Qr(:,i,j), flx)
-  end if
-  F(:,i,j) = flx(:)
-end do
-end do
+    do j=js,je
+    do i=is,ie+1
+        if (flag_flux == 1) then
+            call HLL (1, ch, Ql(:,i,j), Qr(:,i,j), flx)
+        else
+            call HLLD(1, ch, Ql(:,i,j), Qr(:,i,j), flx)
+        end if
+        F(:,i,j) = flx(:)
+    end do
+    end do
 !$omp end do
 
 ! ---- y-direction: reconstruction ----
 !$omp do collapse(2) schedule(static) private(i,j,flx,dQp,dQm,dQmon)
-do j=js-1,je+1
-do i=is,ie
-  dQp(1:NVAR) = Q(1:NVAR,i,j+1) - Q(1:NVAR,i,j  )
-  dQm(1:NVAR) = Q(1:NVAR,i,j  ) - Q(1:NVAR,i,j-1)
-  call vanLeer(NVAR, dQp, dQm, dQmon)
-  Ql(1:NVAR,i,j+1) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
-  Qr(1:NVAR,i,j  ) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
-end do
-end do
+    do j=js-1,je+1
+    do i=is,ie
+        dQp(1:NVAR) = Q(1:NVAR,i,j+1) - Q(1:NVAR,i,j  )
+        dQm(1:NVAR) = Q(1:NVAR,i,j  ) - Q(1:NVAR,i,j-1)
+
+        call vanLeer(NVAR, dQp, dQm, dQmon)
+
+        Ql(1:NVAR,i,j+1) = Q(1:NVAR,i,j) + 0.5d0*dQmon(1:NVAR)
+        Qr(1:NVAR,i,j  ) = Q(1:NVAR,i,j) - 0.5d0*dQmon(1:NVAR)
+    end do
+    end do
 !$omp end do
 
 ! ---- y-direction: Riemann solver ----
 !$omp do collapse(2) schedule(static) private(i,j,flx)
-do j=js,je+1
-do i=is,ie
-  if (flag_flux == 1) then
-    call HLL (2, ch, Ql(:,i,j), Qr(:,i,j), flx)
-  else
-    call HLLD(2, ch, Ql(:,i,j), Qr(:,i,j), flx)
-  end if
-  G(:,i,j) = flx(:)
-end do
-end do
+    do j=js,je+1
+    do i=is,ie
+        if (flag_flux == 1) then
+            call HLL (2, ch, Ql(:,i,j), Qr(:,i,j), flx)
+        else
+            call HLLD(2, ch, Ql(:,i,j), Qr(:,i,j), flx)
+        end if
+        G(:,i,j) = flx(:)
+    end do
+    end do
 !$omp end do
 
 return
@@ -922,14 +919,14 @@ real(8), intent(inout) :: U(NVAR,nxtot,nytot)
 integer :: i,j,ihy
 
 !$omp do collapse(2) schedule(static) private(i,j,ihy)
-do j=js,je
-do i=is,ie
-  do ihy=1,NVAR
-    U(ihy,i,j) = Uo(ihy,i,j) + dt1*(-F(ihy,i+1,j) + F(ihy,i,j))/(xf(i+1)-xf(i)) &
-                             + dt1*(-G(ihy,i,j+1) + G(ihy,i,j))/(yf(j+1)-yf(j))
-  end do
-end do
-end do
+    do j=js,je
+    do i=is,ie
+        do ihy=1,NVAR
+            U(ihy,i,j) = Uo(ihy,i,j) + dt1*(-F(ihy,i+1,j) + F(ihy,i,j))/(xf(i+1)-xf(i)) &
+                                     + dt1*(-G(ihy,i,j+1) + G(ihy,i,j))/(yf(j+1)-yf(j))
+        end do
+    end do
+    end do
 !$omp end do
 
 return
@@ -939,7 +936,7 @@ end subroutine UpdateConsv
 !       Update consevative variables U using numerical flux F
 !-------------------------------------------------------------------
 subroutine SrcTerms( dt1, dt0, Q, U )
-use params, only : IPS, NVAR, nxtot, nytot, is, ie, js, je, alpha, Ccfl
+use params, only : IPS, NVAR, nxtot, nytot, is, ie, js, je, alpha, cfl_number
 implicit none
 real(8), intent(in) :: dt1, dt0
 real(8), intent(in)  :: Q(NVAR,nxtot,nytot)
@@ -948,14 +945,14 @@ integer :: i,j
 real(8) :: decay
 
 ! dt0 is the full-step dt, dt1 is the substep (RK) dt
-decay = dexp(-alpha*Ccfl*dt1/dt0)
+    decay = dexp(-alpha*cfl_number*dt1/dt0)
 
 !$omp do collapse(2) schedule(static) private(i,j)
-do j=js,je
-do i=is,ie
-  U(IPS,i,j) = U(IPS,i,j)*decay
-end do
-end do
+    do j=js,je
+    do i=is,ie
+        U(IPS,i,j) = U(IPS,i,j)*decay
+    end do
+    end do
 !$omp end do
 
 end subroutine SrcTerms
@@ -985,7 +982,6 @@ implicit none
 real(8), intent(in) :: time! false --> output per dtsnap, true --> force to output
 logical, intent(in) :: flag
 real(8), intent(in) :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
-
 integer::i,j
 character(100)::filename
 real(8), save :: tsnap = - dtsnap
@@ -1015,14 +1011,14 @@ integer, save :: nsnap = 0
         open(unitsnap,file=filename,form='formatted',action="write")
         write(unitsnap,*) "# time = ",time
         write(unitsnap,*) "#nx, ny = ", nx, ny
-          do j=js,je
-          do i=is,ie
-              write(unitsnap,'(1p,11(es24.16e3,1x))') xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), &
-                                Q(IPR,i,j), Q(IBX,i,j), Q(IBY,i,j), Q(IBZ,i,j) , Q(IPS,i,j)
-
-          enddo
-          enddo
-          close(unitsnap)
+            do j=js,je
+            do i=is,ie
+                write(unitsnap,'(1p,11(es24.16e3,1x))') xv(i), yv(j), Q(IDN,i,j), Q(IVX,i,j), Q(IVY,i,j), Q(IVZ,i,j), &
+                                  Q(IPR,i,j), Q(IBX,i,j), Q(IBY,i,j), Q(IBZ,i,j) , Q(IPS,i,j)
+  
+            enddo
+            enddo
+            close(unitsnap)
       endif
 
     write(6,*) "output binary file:  ",filename,time
