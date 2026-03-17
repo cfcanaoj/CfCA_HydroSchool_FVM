@@ -1005,12 +1005,12 @@ integer, save :: nsnap = 0
         write(unitsnap) time
         write(unitsnap) nx
         write(unitsnap) ny
-        write(unitsnap) 5
-        write(unitsnap) NVAR - 5
+        write(unitsnap) 6
+        write(unitsnap) NVAR - 6
         write(unitsnap) xv(is:ie)
         write(unitsnap) yv(js:je)
-        write(unitsnap) real(Q(1:5,is:ie,js:je)) ! single precision
-        write(unitsnap) real(Q(6:NVAR,is:ie,js:je)) ! single precision
+        write(unitsnap) real(Q(1:6,is:ie,js:je)) ! single precision
+        write(unitsnap) real(Q(7:NVAR,is:ie,js:je)) ! single precision
         close(unitsnap)
     else 
         filename = trim(dirname)//"/snap"//trim(filename)//".dat"
