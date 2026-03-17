@@ -152,7 +152,7 @@ for ax, r in zip(grid, results):
     Az = r["Az"]
     data = r["data"]
 
-    im = ax.imshow( data[varname], extent=(xmin,xmax,ymin,ymax), origin="lower", vmin=0, vmax=4)
+    im = ax.imshow( data[varname], extent=(xmin,xmax,ymin,ymax), origin="lower", vmin=0, vmax=3.5)
     ax.contour( x, y, Az, linestyles="solid", levels=20, colors="white", linewidths=0.7)
 
     ax.set_xlim(xmin, xmax)
