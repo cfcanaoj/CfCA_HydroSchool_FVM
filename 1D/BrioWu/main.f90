@@ -326,8 +326,8 @@ real(8) :: dQ
       enddo
 
       do i=is,ie+1
-!         call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx(:))
-         call HLL(Ql(:,i),Qr(:,i),flx(:))
+         call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx(:))
+!         call HLL(Ql(:,i),Qr(:,i),flx(:))
          do ihy=1,NVAR
             F(ihy,i)  = flx(ihy)
          enddo
