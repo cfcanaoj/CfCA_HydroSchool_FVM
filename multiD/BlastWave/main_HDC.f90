@@ -1020,7 +1020,7 @@ integer, save :: nsnap = 0
             close(unitsnap)
       endif
 
-      write(6,'(A,A,1X,ES12.5)') "output binary file:", trim(filename), time
+      write(6,'(A,A,1X,ES12.5)') "output file:", trim(filename), time
 
     nsnap=nsnap+1
     tsnap=tsnap + dtsnap

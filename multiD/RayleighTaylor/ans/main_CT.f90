@@ -143,7 +143,7 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
     call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
 
     if( mod(ntime,10) .eq. 0 ) then
-       print*, "ntime = ",ntime, "time = ",time, "dt =" ,dt
+       write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
        call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
        write(unitevo,*) time, phys_evo(1:nevo)
     endif
@@ -1220,7 +1220,7 @@ integer, save :: nsnap = 0
 
      close(unitbin)
 
-     write(6,*) "output:  ",filename,time
+     write(6,'(A,A,1X,ES12.5)') "output file:", trim(filename), time
 
       nsnap=nsnap+1
       tsnap=tsnap + dtsnap
