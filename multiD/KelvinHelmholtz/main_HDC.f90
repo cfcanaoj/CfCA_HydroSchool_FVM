@@ -216,6 +216,7 @@ integer :: i, j
        Q(IDN,i,j) = 1.0d0 
        Q(IVX,i,j) = 0.0d0
        Q(IVY,i,j) = 0.0d0
+       Q(IVZ,i,j) = 0.0d0
        Q(IPR,i,j) = 1.0d0
        Q(ISC,i,j) = 0.0d0
 

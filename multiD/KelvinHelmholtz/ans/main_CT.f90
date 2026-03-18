@@ -208,6 +208,7 @@ real(8) :: pi, den, B0, rho1, rho2, dv, wid, v1, v2, sig
         Q(IVY,i,j)  = 0.001d0*dsin(2.0d0*pi*xv(i))* &
              ( dexp( - (yv(j) + 0.5d0)**2/sig**2 ) +  &
                dexp( - (yv(j) - 0.5d0)**2/sig**2 ) )
+        Q(IVZ,i,j) = 0.0d0
         Q(IPR,i,j) = 1.0d0
 
         Q(ISC,i,j) = 0.5d0*( dtanh( (yv(j)+0.5d0)/wid ) - tanh( (yv(j)-0.5d0)/wid) )
