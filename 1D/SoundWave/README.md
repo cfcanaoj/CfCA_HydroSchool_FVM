@@ -6,23 +6,31 @@
 
 非摂動状態として，静止した一様ガスを考える($\rho=\rho_0=1$, $v=0$, $P=P_0=1/\gamma$)。
 以下のように$+x$方向に伝播する密度摂動を考える。
+
 $$
 \rho = \rho_0 + \delta \rho\sin(k(x - c_\mathrm{s}t)),
 $$
+
 ここで，$k=2\pi/L$は波数, $L$は解散領域のサイズ，$c_\mathrm{s}=\sqrt{\gamma P_0 /\rho_0}$は音速である。
 
 上記の密度摂動と整合的な速度摂動と圧力摂動を求めよう。
 線形化した連続の式
+
 $$
 \rho_0 \frac{\partial v}{\partial x} + \frac{\partial \rho}{\partial t} = 0
 $$
+
 から，以下のように速度摂動が導かれる。
-$$\rho_0 \frac{\partial \delta v}{\partial x}
+
+$$
+\rho_0 \frac{\partial \delta v}{\partial x}
 = c_\mathrm{s}k \delta \rho\cos (k(x-c_\mathrm{s}t)),\;\;\;
 \Rightarrow\;\;\;
 \delta v = c_\mathrm{s} \frac{\delta \rho}{\rho_0} \sin (k(x-c_\mathrm{s}t))
 $$
+
 断熱の式を線形化すると($d\ln (P\rho^{-\gamma})/dt = 0$), 以下のように圧力摂動を得る。
+
 $$
 \frac{\delta P}{P_0} = \gamma \frac{\delta \rho}{\rho_0}\sin(k(x - c_\mathrm{s}t)),
 \;\;\;\Rightarrow\;\;\;
@@ -37,7 +45,7 @@ $$
 
 ファイル名         | 説明  
 ------------------|----------
- ans/main.f90     | 完成品
+ ans/main.f90     | 完成品 (流体学校の実習のため，SoundWave/直下にはサンプルコードがない。)
  可視化スクリプト   | RealtimeAnim.plt, MakeAnime.sh, MakeAnime.py, MakeCompare.py
 
 
