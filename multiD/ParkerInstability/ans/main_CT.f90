@@ -1,67 +1,66 @@
 module params
-  real(8), parameter:: timemax=60d0 ! simulation end time
-    
-  ! option
-  integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
-    
-  ! coordinate 
-  integer,parameter::nx=50  ! the number of grids in the simulation box
-  integer,parameter::ny=3*nx ! the number of grids in the simulation box
-  integer,parameter::ngh=2         ! the number of ghost cells
-  integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-  integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-  integer,parameter::is=ngh+1         ! the index of the leftmost grid
-  integer,parameter::js=ngh+1         ! the index of the leftmost grid
-  integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
-  integer,parameter::je=ny+ngh     ! the index of the rightmost grid
-    real(8),parameter::xmin=-7.5d0*acos(-1.0d0),xmax=7.5d0*acos(-1.0d0)
-    real(8),parameter::ymin=-15d0*acos(-1.0d0),ymax=15d0*acos(-1.0d0)
-    
-  real(8),parameter::Ccfl=0.4d0
-    
-  ! indices of the conservative variables
-  integer, parameter :: IDN = 1
-  integer, parameter :: IMX = 2
-  integer, parameter :: IMY = 3
-  integer, parameter :: IMZ = 4
-  integer, parameter :: IPR = 5
-  integer, parameter :: IBX = 6
-  integer, parameter :: IBY = 7
-  integer, parameter :: IBZ = 8
-  integer, parameter :: NVAR = 5
-  integer, parameter :: NFLX = 8
-    
-  ! indices of the primitive variables
-  integer, parameter :: IVX = 2
-  integer, parameter :: IVY = 3
-  integer, parameter :: IVZ = 4
-  integer, parameter :: IEN = 5
+real(8), parameter:: timemax = 60d0 ! simulation end time
   
-  real(8),parameter::gam=1.05d0!! adiabatic index
+! option
+integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
+  
+! coordinate 
+integer,parameter :: nx = 256 ! the number of grids in the simulation box
+integer,parameter :: ny = 3*nx ! the number of grids in the simulation box
+integer,parameter :: ngh = 2         ! the number of ghost cells
+integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: nytot = ny+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: is = ngh+1         ! the index of the leftmost grid
+integer,parameter :: js = ngh+1         ! the index of the leftmost grid
+integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
+integer,parameter :: je = ny+ngh     ! the index of the rightmost grid
+real(8),parameter :: xmin = -7.5d0*acos(-1.0d0),xmax = 7.5d0*acos(-1.0d0)
+real(8),parameter :: ymin = -15d0*acos(-1.0d0),ymax = 15d0*acos(-1.0d0)
+  
+real(8),parameter :: cfl_number = 0.4d0
+  
+! indices of the conservative variables
+integer, parameter :: IDN = 1
+integer, parameter :: IMX = 2
+integer, parameter :: IMY = 3
+integer, parameter :: IMZ = 4
+integer, parameter :: IPR = 5
+integer, parameter :: IBX = 6
+integer, parameter :: IBY = 7
+integer, parameter :: IBZ = 8
+integer, parameter :: NVAR = 5
+integer, parameter :: NFLX = 8
+  
+! indices of the primitive variables
+integer, parameter :: IVX = 2
+integer, parameter :: IVY = 3
+integer, parameter :: IVZ = 4
+integer, parameter :: IEN = 5
 
-  real(8), parameter :: Hg    = 5.0d0    ! scale hight of gravity
-  real(8), parameter :: g0    = 1.47d0     ! at which TL -> TH
-  real(8), parameter :: beta0 = 1.0d0    ! plasma beta 
-  real(8), parameter :: Ht    = 0.5d0    ! scale hight of gas temperature
-  real(8), parameter :: TL    = 1.0d0/gam  ! gas temperature at the midplane
-  real(8), parameter :: TH    = 25.0d0/gam ! gas temperature at upper atmospheres
-  real(8), parameter :: y0    = 10.0d0     ! at which TL -> TH
-  real(8), parameter :: amp   = 0.01d0      ! amplitude of vx perturbation
-  real(8), parameter :: lam   = 7.5d0*acos(-1.0d0) ! wavelength of vx perturbation
+real(8),parameter::gam=1.05d0!! adiabatic index
 
-  ! output 
-!  character(20),parameter::dirname="ct_openmp" ! directory name
-  character(20),parameter::dirname="ct_new" ! directory name
-  logical, parameter :: flag_binary = .false.
-    
-  ! snapshot
-  integer, parameter :: unitsnap = 17
-  real(8), parameter:: dtsnap=2.0d0
-    
-  ! realtime analysis 
-  integer, parameter :: nevo = 3
-  integer, parameter :: unitevo =11
-  integer, parameter :: unitbin =13
+real(8), parameter :: Hg    = 5.0d0    ! scale hight of gravity
+real(8), parameter :: g0    = 1.47d0     ! at which TL -> TH
+real(8), parameter :: beta0 = 1.0d0    ! plasma beta 
+real(8), parameter :: Ht    = 0.5d0    ! scale hight of gas temperature
+real(8), parameter :: TL    = 1.0d0/gam  ! gas temperature at the midplane
+real(8), parameter :: TH    = 25.0d0/gam ! gas temperature at upper atmospheres
+real(8), parameter :: y0    = 10.0d0     ! at which TL -> TH
+real(8), parameter :: amp   = 0.01d0      ! amplitude of vx perturbation
+real(8), parameter :: lam   = 7.5d0*acos(-1.0d0) ! wavelength of vx perturbation
+
+! output 
+character(20),parameter::dirname="ct" ! directory name
+logical, parameter :: flag_binary = .true.
+  
+! snapshot
+integer, parameter :: unitsnap = 17
+real(8), parameter:: dtsnap=2.0d0
+  
+! realtime analysis 
+integer, parameter :: nevo = 3
+integer, parameter :: unitevo =11
+integer, parameter :: unitbin =13
 end module
 
 program main
@@ -114,7 +113,6 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
 
   write(6,*) "Start the simulation"
   open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
-!  t0 = omp_get_wtime()
 ! main loop
   do 
     dt = TimestepControl(xf, yf, Q, Bc)
@@ -146,24 +144,20 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
 
     time=time+dt
     ntime = ntime + 1
-
-    if( mod(ntime,10) .eq. 0 ) then
-       call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
-       write(unitevo,*) time, phys_evo(1:nevo)
-    endif
     call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
 
-    print*, "ntime = ",ntime, "time = ",time, dt
+    if( mod(ntime,10) .eq. 0 ) then
+       write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
+       call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
+       write(unitevo,'(*(1X,ES24.16E3))') time, phys_evo(1:nevo)
+    endif
 
     if(time >= timemax) exit 
-!    if(ntime >= 1000) exit 
   enddo 
-!      t1 = omp_get_wtime()
-!     write(*,*) "max threads =", omp_get_max_threads() !, (t1 - t0), " s"
   close(unitevo)
 
 
-!      write(6,*) "program has been finished"
+   write(6,*) "program has been finished"
 
 end program main
 !-------------------------------------------------------------------
@@ -474,7 +468,7 @@ end subroutine CellCenterMagneticField
 !-------------------------------------------------------------------
 real(8) function TimestepControl(xf, yf, Q, Bc )
 use params, only : nxtot,nytot,NVAR,is, ie, js, je, &
-                   IDN, IVX, IVY, IVZ, IPR, gam, Ccfl
+                   IDN, IVX, IVY, IVZ, IPR, gam, cfl_number
 implicit none
 real(8), intent(in) :: xf(nxtot), yf(nytot)
 real(8), intent(in) :: Q(NVAR,nxtot,nytot), Bc(3,nxtot,nytot)
@@ -497,7 +491,7 @@ integer::i,j
         enddo
 !$omp end parallel do
 
-        TimestepControl = Ccfl* dtmin
+        TimestepControl = cfl_number* dtmin
 
 return
 end function TimestepControl
@@ -1246,7 +1240,7 @@ integer, save :: nsnap = 0
 
      close(unitbin)
 
-     write(6,*) "output:  ",filename,time
+     write(6,'(A,A,1X,ES12.5)') "output file:", trim(filename), time
 
       nsnap=nsnap+1
       tsnap=tsnap + dtsnap

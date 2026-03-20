@@ -29,12 +29,15 @@ integer, parameter :: IEN = 5
 ! adiabatic index
 real(8),parameter::gam=5.0d0/3.0d0 
 
+! CFL number
+real(8),parameter :: cfl_number = 0.1d0
+
 ! output 
-character(20),parameter::dirname="hll" ! directory name
+character(20),parameter::dirname="hlld" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
-real(8), parameter :: dtsnap=5.0d-3
+real(8), parameter :: dtsnap=2.0d-3
 
 ! realtime analysis 
 integer, parameter :: unitevo = 11
@@ -97,9 +100,10 @@ real(8), external :: TimestepControl
          if(time >= timemax) exit 
       enddo 
       call Output( time, .TRUE., xv, Q )
-      call AnalysisAfterSimu(time,xv,Q)
+!      call AnalysisAfterSimu(time,xv,Q)
 
-!      write(6,*) "program has been finished"
+      write(6,*) "program has been finished"
+
 end program main
 !=============================================================
 ! GenerateGrid
@@ -271,7 +275,8 @@ end subroutine Consv2Prim
 !            where c_s = sqrt(gam * p / rho).
 !=============================================================
 Real(8) Function TimestepControl(xf, Q) 
-use params, only : IDN, IVX, IPR, IBY, IBZ, Bx, NVAR, nxtot, is, ie, gam 
+use params, only : IDN, IVX, IPR, IBY, IBZ, Bx, NVAR, nxtot, is, ie, gam, &
+                   cfl_number
 implicit none
 real(8), intent(in) :: xf(nxtot), Q(NVAR,nxtot)
 real(8)::dtl1
@@ -289,7 +294,7 @@ integer::i
          if(dtlocal .lt. dtmin) dtmin = dtlocal
     enddo
 
-    TimestepControl = 0.1d0 * dtmin
+    TimestepControl = cfl_number*dtmin
 
 return
 end function TimestepControl
@@ -332,8 +337,8 @@ real(8) :: dQm, dQp, dQ
 
       do i=is,ie+1
 !         call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx(:))
-         call HLL(Ql(:,i),Qr(:,i),flx(:))
-!         call HLLD(Ql(:,i),Qr(:,i),flx(:))
+!         call HLL(Ql(:,i),Qr(:,i),flx(:))
+         call HLLD(Ql(:,i),Qr(:,i),flx(:))
          do ihy=1,NVAR
             F(ihy,i)  = flx(ihy)
          enddo
@@ -450,7 +455,6 @@ real(8),intent(in) :: Ql(NVAR), Qr(NVAR)
 real(8),intent(out):: flx(NVAR)
 real(8):: Ul(NVAR), Ur(NVAR)
 real(8):: Fl(NVAR), Fr(NVAR)
-real(8):: Fst(NVAR)
 real(8):: cfl,cfr
 real(8):: sl, sr
 real(8):: pbl, pbr, ptotl, ptotr
@@ -548,7 +552,6 @@ real(8):: Ul(NVAR), Ur(NVAR)
 real(8):: Ulst(NVAR), Urst(NVAR)
 real(8):: Uldst(NVAR), Urdst(NVAR)
 real(8):: Fl(NVAR), Fr(NVAR)
-real(8):: test(NVAR)
 real(8):: cfl,cfr
 real(8):: S0, S1, S2, S3, S4
 real(8):: pbl, pbr, ptotl, ptotr
@@ -569,10 +572,12 @@ integer :: i, n
                      + dsqrt( (2.0d0*pbr - gam*Qr(IPR))**2 &
                      + 4.0d0*gam*Qr(IPR)*( Qr(IBY)**2 + Qr(IBZ)**2 ) ) )/Qr(IDN) )
 
-    S0 = min( Ql(IVX) - cfl, Qr(IVX) - cfr)
-    S4 = max( Ql(IVX) + cfl, Qr(IVX) + cfr)
+!    S0 = min( Ql(IVX) - cfl, Qr(IVX) - cfr)
+!    S4 = max( Ql(IVX) + cfl, Qr(IVX) + cfr)
+    S0 = min( Ql(IVX), Qr(IVX) ) - max(cfl,cfr)
+    S4 = max( Ql(IVX), Qr(IVX) ) + max(cfl,cfr)
 
-          ! conserved variables in the left and right states
+    ! conserved variables in the left and right states
     Ul(IDN) = Ql(IDN)
     Ul(IVX) = Ql(IDN)*Ql(IVX)
     Ul(IVY) = Ql(IDN)*Ql(IVY)
@@ -628,12 +633,6 @@ integer :: i, n
     Urst_d_inv = 1.0d0/Urst(IDN)
     sqrtdl = dsqrt(Ulst(IDN))
     sqrtdr = dsqrt(Urst(IDN))
-
-!          if( sqrtdr .ne. sqrtdr ) then
-!              print*, "sqrtdr",sqrtdr, Cr, Cmr
-!             print*,"S", S0,S2,S4
-!              stop
-!          endif
 
     S1 = S2 - dabs(Bx)/sqrtdl
     S3 = S2 + dabs(Bx)/sqrtdr
@@ -729,10 +728,6 @@ integer :: i, n
        Urdst(IEN) = Urst(IEN) + sqrtdr*bxsgn*(v_dot_B_str - tmp)
    endif
 
-!         test = (S4 - S3)*Urst + (S3 - S2)*Urdst + (S2 - S1)*Uldst + (S1 - S0)*Ulst - S4*Ur + S0*Ul + Fr - Fl
-!         print*,test(IVperp2)
-         
-
     !--- Step 6.  Compute flux
     if( S0 >= 0.0d0 ) then
          flx(:) = Fl(:)
@@ -818,7 +813,7 @@ integer, save :: nsnap = 0
     open(unitsnap,file=filename,form='formatted',action="write")
     write(unitsnap,"(a2,f6.4)") "# ",time
     do i=is,ie
-          write(unitsnap,'(1p,9(es24.16,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IVY,i), Q(IVZ,i), & 
+          write(unitsnap,'(1p,9(es24.16e3,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IVY,i), Q(IVZ,i), & 
                                                Q(IPR,i), Bx, Q(IBY,i), Q(IBZ,i)
     enddo
     close(unitsnap)
@@ -878,7 +873,11 @@ real(8) :: error
       do i=is,ie
            error = error + 1.0d0
       enddo
-      print*, nx, error
+
+    open(1,file="error.dat",action="write",position="append")
+    write(1,*) nx, error
+    print*,"nx = ",nx, "error = ",error
+    close(1)
       
 return
 end subroutine

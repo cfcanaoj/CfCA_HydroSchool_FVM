@@ -5,15 +5,26 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import gridspec
+import argparse
 
-if len(sys.argv) < 3:
-    print("Usage: python MakePlot.py step dir1 [dir2 dir3 ...]")
-    sys.exit(1)
+#------------------------------------------------------------
+parser = argparse.ArgumentParser(
+    description="Create a comparison shapshot from multiple simulation outputs.",
+    usage="python3 MakeCompare.py [step] [dir1] [dir2]",
+    epilog=(
+        "Example:\n"
+        "  python3 MakeCompare.py 20 lax\n"
+        "  python3 MakeCompare.py 20 lax hll\n"
+    ),
+    formatter_class=argparse.RawTextHelpFormatter
+)
+parser.add_argument("step", type=int, help="step number")
+parser.add_argument("dirnames", nargs="+", help="one or more directories containing snapshot files")
+args = parser.parse_args()
+step       = args.step
+dirnames   = args.dirnames
 
-step = int(sys.argv[1])
-dirnames = sys.argv[2:]
-
-fig = plt.figure(figsize=(6, 4))
+fig = plt.figure(figsize=(7,5)) 
 gs = gridspec.GridSpec(1, 1, wspace=0.30, hspace=0.2)
 ax = [plt.subplot(gs[i]) for i in range(1)]
 
@@ -21,6 +32,7 @@ ylabel = [r"$B_z$"]
 for i, ax0 in enumerate(ax):
     ax0.minorticks_on()
     ax0.set_xlim(-0.5, 0.5)
+    ax0.set_ylim(-0.15,0.15)
     ax0.set_ylabel(ylabel[i])
     ax0.set_xlabel(r"$x$")
     ax0.grid()

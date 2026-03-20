@@ -1,26 +1,26 @@
 module params
 
-real(8), parameter:: timemax=10d0 ! simulation end time
+real(8), parameter:: timemax = 10d0 ! simulation end time
 
 ! option
 integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter :: nx=50   ! the number of grids in the simulation box
-integer,parameter :: ny=nx*3 ! the number of grids in the simulation box
-integer,parameter :: ngh=2         ! the number of ghost cells
-integer,parameter :: nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter :: nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter :: is=ngh+1         ! the index of the leftmost grid
-integer,parameter :: js=ngh+1         ! the index of the leftmost grid
-integer,parameter :: ie=nx+ngh     ! the index of the rightmost grid
-integer,parameter :: je=ny+ngh     ! the index of the rightmost grid
-real(8),parameter :: xmin=-0.25d0,xmax=0.25d0
-real(8),parameter :: ymin=-0.75d0,ymax=0.75d0
+integer,parameter :: nx = 256  ! the number of grids in the simulation box
+integer,parameter :: ny = nx*3 ! the number of grids in the simulation box
+integer,parameter :: ngh = 2         ! the number of ghost cells
+integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: nytot = ny+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: is = ngh+1         ! the index of the leftmost grid
+integer,parameter :: js = ngh+1         ! the index of the leftmost grid
+integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
+integer,parameter :: je = ny+ngh     ! the index of the rightmost grid
+real(8),parameter :: xmin = -0.25d0,xmax = 0.25d0
+real(8),parameter :: ymin = -0.75d0,ymax = 0.75d0
 
-real(8),parameter :: Ccfl=0.4d0
-real(8),parameter : :gam=5.0d0/3.0d0 !! adiabatic index
+real(8),parameter :: cfl_number = 0.4d0
+real(8),parameter :: gam = 5.0d0/3.0d0 !! adiabatic index
 
 real(8), parameter :: alpha = 0.1d0    ! decay timescale of divergence B
 
@@ -50,7 +50,7 @@ character(20),parameter::dirname="hdc" ! directory name
 ! snapshot
 integer, parameter :: unitsnap = 17
 real(8), parameter :: dtsnap   = 2.0d-1
-logical, parameter :: flag_binary = .false.
+logical, parameter :: flag_binary = .true.
 
 ! realtime analysis 
 integer, parameter :: unitevo =11
@@ -139,11 +139,11 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
     ntime = ntime+1
     call Output( time, .FALSE., xv, yv, Q)
 
-    print*, "ntime = ",ntime, "time = ",time, dt
 
     if( mod(ntime,10) .eq. 0 ) then
+      write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
       call RealtimeAnalysis(xv,yv,Q,phys_evo)
-      write(unitevo,*) time, phys_evo(1:nevo)
+      write(unitevo,'(*(1X,ES24.16E3))') time, phys_evo(1:nevo)
     endif
 
     if(time >= timemax) exit mloop
@@ -409,7 +409,7 @@ end subroutine Consv2Prim
 !=============================================================
 real(8) function TimestepControl(xf, yf, Q)
 use params, only : IDN, IVX, IVY, IPR, IBX, IBY, IBZ, NVAR, nxtot, nytot, &
-                   is, ie, js, je, Ccfl, gam
+                   is, ie, js, je, cfl_number, gam
 implicit none
 real(8), intent(in) :: xf(nxtot), yf(nytot), Q(NVAR,nxtot,nytot)
 real(8)::dtl1
@@ -431,7 +431,7 @@ integer::i,j
       enddo
 !$omp end parallel do
 
-      TimestepControl = Ccfl* dtmin
+      TimestepControl = cfl_number* dtmin
 
 return
 end function TimestepControl
@@ -466,7 +466,7 @@ end subroutine vanLeer
 !     2) Solve an approximate Riemann problem to obtain the interface fluxes.
 !=============================================================
 subroutine NumericalFlux( dt, xf, yf, Q, F, G )
-use params, only : nxtot, nytot, NVAR, is, ie, js, je, Ccfl, flag_flux
+use params, only : nxtot, nytot, NVAR, is, ie, js, je, cfl_number, flag_flux
 implicit none
 real(8), intent(in) :: dt
 real(8), intent(in) :: xf(nxtot), yf(nytot)
@@ -486,7 +486,7 @@ real(8) :: flx(NVAR)
 real(8) :: dQm(NVAR), dQp(NVAR), dQmon(NVAR)
 real(8) :: ch
 
-ch = 1.0d0*Ccfl*min( xf(is+1) - xf(is), yf(js+1) - yf(js ) )/dt
+ch = 1.0d0*cfl_number*min( xf(is+1) - xf(is), yf(js+1) - yf(js ) )/dt
 
 ! ---- x-direction: reconstruction ----
 !$omp do collapse(2) schedule(static) private(i,j,flx,dQp,dQm,dQmon)
@@ -969,7 +969,7 @@ end subroutine UpdateConsv
 subroutine SrcTerms( dt1, dt0, Q, U )
 use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
                    IMX, IMY, IMZ, IEN, IPS, NVAR, nxtot, nytot, &
-                   is, ie, js, je, alpha, Ccfl, grav_accy
+                   is, ie, js, je, alpha, cfl_number, grav_accy
 implicit none
 real(8), intent(in) :: dt1, dt0
 real(8), intent(in)  :: Q(NVAR,nxtot,nytot)
@@ -978,7 +978,7 @@ integer :: i,j
 real(8) :: decay, src
 
 ! dt0 is the full-step dt, dt1 is the substep (RK) dt
-decay = dexp(-alpha*Ccfl*dt1/dt0)
+decay = dexp(-alpha*cfl_number*dt1/dt0)
 
 !$omp do collapse(2) schedule(static) private(i,j)
 do j=js,je
@@ -1058,7 +1058,7 @@ integer, save :: nsnap = 0
           close(unitsnap)
       endif
 
-    write(6,*) "output binary file:  ",filename,time
+    write(6,'(A,A,1X,ES12.5)') "output file:", trim(filename), time
 
     nsnap=nsnap+1
     tsnap=tsnap + dtsnap

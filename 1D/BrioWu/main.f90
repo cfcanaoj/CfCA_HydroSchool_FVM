@@ -1,14 +1,14 @@
 module params
-real(8),parameter:: timemax=0.1d0 ! simulation end time
+real(8),parameter :: timemax = 0.1d0 ! simulation end time
 
-integer,parameter::nx=256*1       ! the number of grids in the simulation box
-integer,parameter::ngh=2            ! the number of ghost cells
-integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::is=ngh+1         ! the index of the leftmost grid
-integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
-real(8),parameter:: xmin=-0.5d0,xmax=0.5d0
+integer,parameter :: nx = 256*1       ! the number of grids in the simulation box
+integer,parameter :: ngh = 2            ! the number of ghost cells
+integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: is = ngh+1         ! the index of the leftmost grid
+integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
+real(8),parameter :: xmin = -0.5d0,xmax = 0.5d0
 
-real(8),parameter:: Bx=0.75
+real(8),parameter:: Bx = 0.75
 
 ! indices of the primitive variables
 integer, parameter :: IDN = 1
@@ -33,11 +33,11 @@ real(8),parameter::gam = 5.0d0/3.0d0
 real(8),parameter :: cfl_number = 0.1d0
 
 ! output 
-character(20),parameter::dirname="hll" ! directory name
+character(20),parameter::dirname="lax" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
-real(8), parameter :: dtsnap=5.0d-3
+real(8), parameter :: dtsnap = 5.0d-3
 
 ! realtime analysis 
 integer, parameter :: unitevo = 11
@@ -314,18 +314,10 @@ real(8), intent(out) :: F(NVAR,nxtot)
 real(8) :: Ql(NVAR,nxtot),Qr(NVAR,nxtot)
 real(8) :: flx(NVAR)
 integer :: i,ihy
-real(8) :: dQm, dQp, dQ
+real(8) :: dQ
 
       do i=is-1,ie+1
       do ihy=1,NVAR
-         dQp = Q(ihy,i+1) - Q(ihy,i  )
-         dQm = Q(ihy,i  ) - Q(ihy,i-1)
-
-         if(dQp*dQm .gt. 0.0d0)then
-            dQ = 2.0d0*dQp*dQm/(dQp+dQm)
-         else
-            dQ = 0.0d0
-         endif
          dQ = 0.0d0
 
          Ql(ihy,i+1) = Q(ihy,i) + 0.5d0*dQ
@@ -334,8 +326,8 @@ real(8) :: dQm, dQp, dQ
       enddo
 
       do i=is,ie+1
-!         call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx(:))
-         call HLL(Ql(:,i),Qr(:,i),flx(:))
+         call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx(:))
+!         call HLL(Ql(:,i),Qr(:,i),flx(:))
          do ihy=1,NVAR
             F(ihy,i)  = flx(ihy)
          enddo
@@ -452,306 +444,11 @@ real(8),intent(in) :: Ql(NVAR), Qr(NVAR)
 real(8),intent(out):: flx(NVAR)
 real(8):: Ul(NVAR), Ur(NVAR)
 real(8):: Fl(NVAR), Fr(NVAR)
-real(8):: Fst(NVAR)
-real(8):: cfl,cfr
-real(8):: sl, sr
-real(8):: pbl, pbr, ptotl, ptotr
-integer :: i, n
-
-    pbl = 0.5d0*(Bx**2 + Ql(IBY)**2 + Ql(IBZ)**2)
-    pbr = 0.5d0*(Bx**2 + Qr(IBY)**2 + Qr(IBZ)**2)
-    ptotl = Ql(IPR) + pbl
-    ptotr = Qr(IPR) + pbr
-
-    ! conserved variables in the left and right states
-    Ul(IDN) = Ql(IDN)
-    Ul(IMX) = Ql(IDN)*Ql(IVX)
-    Ul(IMY) = Ql(IDN)*Ql(IVY)
-    Ul(IMZ) = Ql(IDN)*Ql(IVZ)
-    Ul(IEN) = 0.5d0*Ql(IDN)*( Ql(IVX)**2 + Ql(IVY)**2 + Ql(IVZ)**2) & 
-                  + pbl + Ql(IPR)/(gam - 1.0d0)
-    Ul(IBY) = Ql(IBY)
-    Ul(IBZ) = Ql(IBZ)
-
-    Ur(IDN) = Qr(IDN)
-    Ur(IMX) = Qr(IDN)*Qr(IVX)
-    Ur(IMY) = Qr(IDN)*Qr(IVY)
-    Ur(IMZ) = Qr(IDN)*Qr(IVZ)
-    Ur(IEN) = 0.5d0*Qr(IDN)*( Qr(IVX)**2 + Qr(IVY)**2 + Qr(IVZ)**2) & 
-                  + pbr + Qr(IPR)/(gam - 1.0d0)
-    Ur(IBY) = Qr(IBY)
-    Ur(IBZ) = Qr(IBZ)
-
-    ! flux in the left and right states
-    Fl(IDN) = Ul(IMX)
-    Fl(IMX) = Ul(IMX)*Ql(IVX) + ptotl - Bx**2
-    Fl(IMY) = Ul(IMY)*Ql(IVX) - Bx*Ql(IBY)
-    Fl(IMZ) = Ul(IMZ)*Ql(IVX) - Bx*Ql(IBZ)
-    Fl(IEN) = ( Ul(IEN) + ptotl )*Ql(IVX) &
-            - Bx*( Bx*Ql(IVX) + Ql(IBY)*Ql(IVY) + Ql(IBZ)*Ql(IVZ) )
-    Fl(IBY) = Ql(IBY)*Ql(IVX) - Bx*Ql(IVY)
-    Fl(IBZ) = Ql(IBZ)*Ql(IVX) - Bx*Ql(IVZ)
-
-    Fr(IDN) = Ur(IMX)
-    Fr(IMX) = Ur(IMX)*Qr(IVX) + ptotr - Bx**2
-    Fr(IMY) = Ur(IMY)*Qr(IVX) - Bx*Qr(IBY)
-    Fr(IMZ) = Ur(IMZ)*Qr(IVX) - Bx*Qr(IBZ)
-    Fr(IEN) = ( Ur(IEN) + ptotr )*Qr(IVX) &
-                  - Bx*( Bx*Qr(IVX) + Qr(IBY)*Qr(IVY) + Qr(IBZ)*Qr(IVZ) )
-    Fr(IBY) = Qr(IBY)*Qr(IVX) - Bx*Qr(IVY)
-    Fr(IBZ) = Qr(IBZ)*Qr(IVX) - Bx*Qr(IVZ)
-
-!    cfl = dsqrt( (gam*Ql(IPR) + Ql(IBY)**2 + Ql(IBZ)**2 + Bx**2)/Ql(IDN))
-!    cfr = dsqrt( (gam*Qr(IPR) + Qr(IBY)**2 + Qr(IBZ)**2 + Bx**2)/Qr(IDN))
-    cfl = sqrt( 0.5d0*( 2.0d0*pbl + gam*Ql(IPR) &
-                     + dsqrt( (2.0d0*pbl - gam*Ql(IPR))**2 &
-                     + 4.0d0*gam*Ql(IPR)*( Ql(IBY)**2 + Ql(IBZ)**2 ) ) )/Ql(IDN) )
-    cfr = sqrt( 0.5d0*( 2.0d0*pbr + gam*Qr(IPR) &
-                     + dsqrt( (2.0d0*pbr - gam*Qr(IPR))**2 &
-                     + 4.0d0*gam*Qr(IPR)*( Qr(IBY)**2 + Qr(IBZ)**2 ) ) )/Qr(IDN) )
-
-   sl = min(Ql(IVX),Qr(IVX)) - max(cfl,cfr)
-   sr = max(Ql(IVX),Qr(IVX)) + max(cfl,cfr)
-!    sl = min(Ql(IVX) - cfl,Qr(IVX) - cfr)
-!    sr = max(Ql(IVX) + cfl,Qr(IVX) + cfr)
 
 
-    if( sl > 0.0d0 ) then
-        flx(:)  = Fl(:) 
-    else if (sr <= 0.0d0 ) then
-        flx(:)  = Fr(:) 
-    else 
-        flx(:)  = (sr*Fl(:) - sl*Fr(:) + sl*sr*( Ur(:) - Ul(:) ))/(sr - sl)
-    endif
 
 return
 end subroutine HLL
-!=============================================================
-! HLLD
-! Description:
-!   Compute the interface flux using the HLLD approximate Riemann solver for
-!   the 1D MHD equations.
-!
-! Inputs:
-!   Ql(:)  Left primitive state  (rho, v, p)
-!   Qr(:)  Right primitive state (rho, v, p)
-!
-! Output:
-!   flx(:) Conservative flux (mass, momentum, energy)
-!=============================================================
-subroutine HLLD(Ql,Qr,flx)
-use params, only : IDN, IVX, IVY, IVZ, IPR, IBY, IBZ, &
-                   IMX, IMY, IMZ, IEN, NVAR, Bx, gam
-implicit none
-real(8),intent(in)  :: Ql(NVAR), Qr(NVAR)
-real(8),intent(out) :: flx(NVAR)
-real(8):: b1
-real(8):: Ul(NVAR), Ur(NVAR)
-real(8):: Ulst(NVAR), Urst(NVAR)
-real(8):: Uldst(NVAR), Urdst(NVAR)
-real(8):: Fl(NVAR), Fr(NVAR)
-real(8):: test(NVAR)
-real(8):: cfl,cfr
-real(8):: S0, S1, S2, S3, S4
-real(8):: pbl, pbr, ptotl, ptotr
-real(8) :: sqrtdl, sqrtdr, v_dot_B_stl, v_dot_B_str
-real(8) :: Ulst_d_inv, Urst_d_inv, sum_sqrtd_inv, tmp
-real(8) :: ptot_stl, ptot_str,ptot_st, Cl, Cr, Cml, Cmr, Cml_inv, Cmr_inv, bxsgn
-integer :: i, n
-
-    pbl = 0.5d0*(Bx**2 + Ql(IBY)**2 + Ql(IBZ)**2)
-    pbr = 0.5d0*(Bx**2 + Qr(IBY)**2 + Qr(IBZ)**2)
-    ptotl = Ql(IPR) + pbl
-    ptotr = Qr(IPR) + pbr
-
-    cfl = sqrt( 0.5d0*( 2.0d0*pbl + gam*Ql(IPR) &
-                     + dsqrt( (2.0d0*pbl - gam*Ql(IPR))**2 &
-                     + 4.0d0*gam*Ql(IPR)*( Ql(IBY)**2 + Ql(IBZ)**2 ) ) )/Ql(IDN) )
-    cfr = sqrt( 0.5d0*( 2.0d0*pbr + gam*Qr(IPR) &
-                     + dsqrt( (2.0d0*pbr - gam*Qr(IPR))**2 &
-                     + 4.0d0*gam*Qr(IPR)*( Qr(IBY)**2 + Qr(IBZ)**2 ) ) )/Qr(IDN) )
-
-    S0 = min( Ql(IVX) - cfl, Qr(IVX) - cfr)
-    S4 = max( Ql(IVX) + cfl, Qr(IVX) + cfr)
-
-          ! conserved variables in the left and right states
-    Ul(IDN) = Ql(IDN)
-    Ul(IVX) = Ql(IDN)*Ql(IVX)
-    Ul(IVY) = Ql(IDN)*Ql(IVY)
-    Ul(IVZ) = Ql(IDN)*Ql(IVZ)
-    Ul(IEN) = 0.5d0*Ql(IDN)*( Ql(IVX)**2 + Ql(IVY)**2 + Ql(IVZ)**2) & 
-            + pbl + Ql(IPR)/(gam - 1.0d0)
-    Ul(IBY) = Ql(IBY)
-    Ul(IBZ) = Ql(IBZ)
-
-    Ur(IDN) = Qr(IDN)
-    Ur(IVX) = Qr(IDN)*Qr(IVX)
-    Ur(IVY) = Qr(IDN)*Qr(IVY)
-    Ur(IVZ) = Qr(IDN)*Qr(IVZ)
-    Ur(IEN) = 0.5d0*Qr(IDN)*( Qr(IVX)**2 + Qr(IVY)**2 + Qr(IVZ)**2) & 
-            + pbr + Qr(IPR)/(gam - 1.0d0)
-    Ur(IBY) = Qr(IBY)
-    Ur(IBZ) = Qr(IBZ)
-
-    !--- Step 3.  Compute L/R fluxes
-    Fl(IDN) = Ul(IVX)
-    Fl(IVX) = Ul(IVX)*Ql(IVX) + ptotl - Bx**2
-    Fl(IVY) = Ul(IVY)*Ql(IVX) - Bx*Ql(IBY)
-    Fl(IVZ) = Ul(IVZ)*Ql(IVX) - Bx*Ql(IBZ)
-    Fl(IEN) = ( Ul(IEN) + ptotl - Bx**2 )*Ql(IVX) &
-            - Bx*( Ql(IBY)*Ql(IVY) + Ql(IBZ)*Ql(IVZ) )
-    Fl(IBY) = Ql(IBY)*Ql(IVX) - Bx*Ql(IVY)
-    Fl(IBZ) = Ql(IBZ)*Ql(IVX) - Bx*Ql(IVZ)
-
-    Fr(IDN) = Ur(IVX)
-    Fr(IVX) = Ur(IVX)*Qr(IVX) + ptotr - Bx**2
-    Fr(IVY) = Ur(IVY)*Qr(IVX) - Bx*Qr(IBY)
-    Fr(IVZ) = Ur(IVZ)*Qr(IVX) - Bx*Qr(IBZ)
-    Fr(IEN) = ( Ur(IEN) + ptotr - Bx**2 )*Qr(IVX) &
-            - Bx*( Qr(IBY)*Qr(IVY) + Qr(IBZ)*Qr(IVZ) )
-    Fr(IBY) = Qr(IBY)*Qr(IVX) - Bx*Qr(IVY)
-    Fr(IBZ) = Qr(IBZ)*Qr(IVX) - Bx*Qr(IVZ)
-
-    !--- Step 4.  Compute middle and Alfven wave speeds
-    Cl = S0 - Ql(IVX)
-    Cr = S4 - Qr(IVX)
-
-    S2 = ( Cr*Ur(IVX) - Cl*Ul(IVX) + (ptotl - ptotr) ) &
-           /( Cr*Ur(IDN) - Cl*Ul(IDN) )
-
-    Cml = S0 - S2
-    Cmr = S4 - S2
-    Cml_inv = 1.0d0/Cml
-    Cmr_inv = 1.0d0/Cmr
-
-    Ulst(IDN) = Ul(IDN)*Cl*Cml_inv
-    Urst(IDN) = Ur(IDN)*Cr*Cmr_inv
-    Ulst_d_inv = 1.0d0/Ulst(IDN)
-    Urst_d_inv = 1.0d0/Urst(IDN)
-    sqrtdl = dsqrt(Ulst(IDN))
-    sqrtdr = dsqrt(Urst(IDN))
-
-!          if( sqrtdr .ne. sqrtdr ) then
-!              print*, "sqrtdr",sqrtdr, Cr, Cmr
-!             print*,"S", S0,S2,S4
-!              stop
-!          endif
-
-    S1 = S2 - dabs(Bx)/sqrtdl
-    S3 = S2 + dabs(Bx)/sqrtdr
-
-    !--- Step 5.  Compute intermediate states
-   ptot_stl = ptotl + Ul(IDN)*Cl*(S2 - Ql(IVX))
-   ptot_str = ptotr + Ur(IDN)*Cr*(S2 - Qr(IVX))
-
-   ptot_st = 0.5d0*(ptot_stl + ptot_str)
-
-   Ulst(IVX) = Ulst(IDN)*S2
-   if( dabs( Ul(IDN)*Cl*Cml-Bx**2) < 1.0d-8*ptot_st ) then
-       Ulst(IVY) = Ulst(IDN)*Ql(IVY)
-       Ulst(IVZ) = Ulst(IDN)*Ql(IVZ)
-
-       Ulst(IBY) = Ul(IBY)
-       Ulst(IBZ) = Ul(IBZ)
-   else 
-       tmp = Bx*( Cl - Cml )/(Ul(IDN)*Cl*Cml - Bx**2)
-       Ulst(IVY) = Ulst(IDN)*( Ql(IVY) - Ul(IBY)*tmp )
-       Ulst(IVZ) = Ulst(IDN)*( Ql(IVZ) - Ul(IBZ)*tmp )
-
-       tmp = (Ul(IDN)*Cl**2 - Bx**2)/( Ul(IDN)*Cl*Cml - Bx**2)
-       Ulst(IBY) = Ul(IBY)*tmp
-       Ulst(IBZ) = Ul(IBZ)*tmp
-   endif
-
-   v_dot_B_stl = ( Ulst(IVX)*Bx + Ulst(IVY)*Ulst(IBY) + Ulst(IVZ)*Ulst(IBZ) )*Ulst_d_inv
-   Ulst(IEN) = ( Cl*Ul(IEN) - ptotl*Ql(IVX) + ptot_st*S2 &
-               + Bx*( Ql(IVX)*Bx + Ql(IVY)*Ul(IBY) + Ql(IVZ)*Ul(IBZ) - v_dot_B_stl) )*Cml_inv
-
-   Urst(IVX) = Urst(IDN)*S2
-   if( dabs( Ur(IDN)*Cr*Cmr-Bx**2) < 1.0d-8*ptot_st ) then
-       Urst(IVY) = Urst(IDN)*Qr(IVY)
-       Urst(IVZ) = Urst(IDN)*Qr(IVZ)
-
-       Urst(IBY) = Ur(IBY)
-       Urst(IBZ) = Ur(IBZ)
-   else 
-       tmp = Bx*( Cr - Cmr )/(Ur(IDN)*Cr*Cmr - Bx**2)
-       Urst(IVY) = Urst(IDN)*( Qr(IVY) - Ur(IBY)*tmp )
-       Urst(IVZ) = Urst(IDN)*( Qr(IVZ) - Ur(IBZ)*tmp )
-
-       tmp = (Ur(IDN)*Cr**2 - Bx**2)/( Ur(IDN)*Cr*Cmr - Bx**2)
-       Urst(IBY) = Ur(IBY)*tmp
-       Urst(IBZ) = Ur(IBZ)*tmp
-   endif
-
-   v_dot_B_str = ( Urst(IVX)*Bx + Urst(IVY)*Urst(IBY) + Urst(IVZ)*Urst(IBZ) )*Urst_d_inv
-   Urst(IEN) = ( Cr*Ur(IEN) - ptotr*Qr(IVX) + ptot_st*S2 &
-               + Bx*( Qr(IVX)*Bx + Qr(IVY)*Ur(IBY) + Qr(IVZ)*Ur(IBZ) - v_dot_B_str) )*Cmr_inv
- 
-   if( 0.5d0*Bx**2 < 1.0d-8*ptot_st )then
-       Uldst(:) = Ulst(:)
-       Urdst(:) = Urst(:)
-   else 
-       sum_sqrtd_inv = 1.0d0/(sqrtdl + sqrtdr) 
-       if (Bx > 0.0d0 ) then 
-           bxsgn = 1.0d0
-       else 
-           bxsgn = -1.0d0
-       endif
-
-       Uldst(IDN) = Ulst(IDN)
-       Urdst(IDN) = Urst(IDN)
-
-       Uldst(IVX) = Ulst(IVX)
-       Urdst(IVX) = Urst(IVX)
-
-       tmp = sum_sqrtd_inv*(  sqrtdl*(Ulst(IVY)*Ulst_d_inv) + sqrtdr*(Urst(IVY)*Urst_d_inv) &
-                            + bxsgn*(Urst(IBY) - Ulst(IBY)) )
-       Uldst(IVY) = Uldst(IDN)*tmp
-       Urdst(IVY) = Urdst(IDN)*tmp
-!
-
-       tmp = sum_sqrtd_inv*(  sqrtdl*(Ulst(IVZ)*Ulst_d_inv) + sqrtdr*(Urst(IVZ)*Urst_d_inv) &
-                            + bxsgn*(Urst(IBZ) - Ulst(IBZ)) )
-       Uldst(IVZ) = Uldst(IDN)*tmp
-       Urdst(IVZ) = Urdst(IDN)*tmp
-
-       tmp = sum_sqrtd_inv*(  sqrtdl*Urst(IBY) + sqrtdr*Ulst(IBY) &
-                 + bxsgn*sqrtdl*sqrtdr*( (Urst(IVY)*Urst_d_inv) - (Ulst(IVY)*Ulst_d_inv) ) )
-       Uldst(IBY) = tmp
-       Urdst(IBY) = tmp
-
-       tmp = sum_sqrtd_inv*(  sqrtdl*Urst(IBZ) + sqrtdr*Ulst(IBZ) &
-                 + bxsgn*sqrtdl*sqrtdr*( (Urst(IVZ)*Urst_d_inv) - (Ulst(IVZ)*Ulst_d_inv) ) )
-       Uldst(IBZ) = tmp
-       Urdst(IBZ) = tmp
-!
-       tmp = S2*Bx + (Uldst(IVY)*Uldst(IBY) + Uldst(IVZ)*Uldst(IBZ))/Uldst(IDN)
-       Uldst(IEN) = Ulst(IEN) - sqrtdl*bxsgn*(v_dot_B_stl - tmp)
-       Urdst(IEN) = Urst(IEN) + sqrtdr*bxsgn*(v_dot_B_str - tmp)
-   endif
-
-!         test = (S4 - S3)*Urst + (S3 - S2)*Urdst + (S2 - S1)*Uldst + (S1 - S0)*Ulst - S4*Ur + S0*Ul + Fr - Fl
-!         print*,test(IVperp2)
-         
-
-    !--- Step 6.  Compute flux
-    if( S0 >= 0.0d0 ) then
-         flx(:) = Fl(:)
-    else if (S4 <= 0.0d0 ) then
-         flx(:) = Fr(:)
-    else  if  (S1 >= 0.0d0) then
-         flx(:) = Fl(:) + S0*(Ulst(:) - Ul(:))
-     else if (S2 >= 0.0d0) then
-         flx(:) = Fl(:) + S0*(Ulst(:) - Ul(:)) + S1*(Uldst(:) - Ulst(:))
-     else if (S3 > 0.0d0 ) then
-         flx(:) = Fr(:) + S4*(Urst(:) - Ur(:)) + S3*(Urdst(:) - Urst(:))
-     else 
-         flx(:) = Fr(:) + S4*(Urst(:) - Ur(:)) 
-     endif
-
-return
-end subroutine HLLD
 !=============================================================
 ! UpdateConsv
 ! Description:
@@ -820,7 +517,7 @@ integer, save :: nsnap = 0
     open(unitsnap,file=filename,form='formatted',action="write")
     write(unitsnap,"(a2,f6.4)") "# ",time
     do i=is,ie
-          write(unitsnap,'(1p,9(es24.16,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IVY,i), Q(IVZ,i), & 
+          write(unitsnap,'(1p,9(es24.16e3,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IVY,i), Q(IVZ,i), & 
                                                Q(IPR,i), Bx, Q(IBY,i), Q(IBZ,i)
     enddo
     close(unitsnap)

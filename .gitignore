@@ -9,6 +9,13 @@ snap_alf
 xydata
 epsfile
 output
+pngfile
+pdffile
+hdc*
+ct*
+hlld*
+nohdc*
+lax*
 
 vis3D/hdfdata
 
@@ -22,6 +29,12 @@ vis3D/hdfdata
 
 # outputfile
 *.dat
+
+# movie
+*.mp4
+*.wmw
+*.png
+*.pdf
 
 # Executables
 a.out

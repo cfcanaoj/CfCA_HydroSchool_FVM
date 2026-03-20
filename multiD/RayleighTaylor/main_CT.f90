@@ -1,59 +1,59 @@
 module params
-  real(8), parameter:: timemax=25d0 ! simulation end time
-    
-  ! option
-  integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
-    
-  ! coordinate 
-  integer,parameter::nx=50  ! the number of grids in the simulation box
-  integer,parameter::ny=3*nx ! the number of grids in the simulation box
-  integer,parameter::ngh=2         ! the number of ghost cells
-  integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-  integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-  integer,parameter::is=ngh+1         ! the index of the leftmost grid
-  integer,parameter::js=ngh+1         ! the index of the leftmost grid
-  integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
-  integer,parameter::je=ny+ngh     ! the index of the rightmost grid
-  real(8),parameter::xmin=-0.25d0,xmax=0.25d0
-  real(8),parameter::ymin=-0.75d0,ymax=0.75d0
-    
-  real(8),parameter::Ccfl=0.4d0
-    
-  ! indices of the conservative variables
-  integer, parameter :: IDN = 1
-  integer, parameter :: IMX = 2
-  integer, parameter :: IMY = 3
-  integer, parameter :: IMZ = 4
-  integer, parameter :: IPR = 5
-  integer, parameter :: IBX = 6
-  integer, parameter :: IBY = 7
-  integer, parameter :: IBZ = 8
-  integer, parameter :: NVAR = 5
-  integer, parameter :: NFLX = 8
-    
-  ! indices of the primitive variables
-  integer, parameter :: IVX = 2
-  integer, parameter :: IVY = 3
-  integer, parameter :: IVZ = 4
-  integer, parameter :: IEN = 5
+real(8), parameter:: timemax=25d0 ! simulation end time
   
-  real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
+! option
+integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
+  
+! coordinate 
+integer,parameter::nx=50  ! the number of grids in the simulation box
+integer,parameter::ny=3*nx ! the number of grids in the simulation box
+integer,parameter::ngh=2         ! the number of ghost cells
+integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter::is=ngh+1         ! the index of the leftmost grid
+integer,parameter::js=ngh+1         ! the index of the leftmost grid
+integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
+integer,parameter::je=ny+ngh     ! the index of the rightmost grid
+real(8),parameter::xmin=-0.25d0,xmax=0.25d0
+real(8),parameter::ymin=-0.75d0,ymax=0.75d0
+  
+real(8),parameter::cfl_number=0.4d0
+  
+! indices of the conservative variables
+integer, parameter :: IDN = 1
+integer, parameter :: IMX = 2
+integer, parameter :: IMY = 3
+integer, parameter :: IMZ = 4
+integer, parameter :: IPR = 5
+integer, parameter :: IBX = 6
+integer, parameter :: IBY = 7
+integer, parameter :: IBZ = 8
+integer, parameter :: NVAR = 5
+integer, parameter :: NFLX = 8
+  
+! indices of the primitive variables
+integer, parameter :: IVX = 2
+integer, parameter :: IVY = 3
+integer, parameter :: IVZ = 4
+integer, parameter :: IEN = 5
 
-  real(8),parameter :: grav_accy=-0.1d0  ! gravitaional acceleration
+real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
 
-  ! output 
+real(8),parameter :: grav_accy=-0.1d0  ! gravitaional acceleration
+
+! output 
 !  character(20),parameter::dirname="ct_openmp" ! directory name
-  character(20),parameter::dirname="ct" ! directory name
-  logical, parameter :: flag_binary = .false.
-    
-  ! snapshot
-  integer, parameter :: unitsnap = 17
-  real(8), parameter:: dtsnap=2.0d-1
-    
-  ! realtime analysis 
-  integer, parameter :: nevo = 3
-  integer, parameter :: unitevo =11
-  integer, parameter :: unitbin =13
+character(20),parameter::dirname="ct" ! directory name
+logical, parameter :: flag_binary = .false.
+  
+! snapshot
+integer, parameter :: unitsnap = 17
+real(8), parameter:: dtsnap=2.0d-1
+  
+! realtime analysis 
+integer, parameter :: nevo = 3
+integer, parameter :: unitevo =11
+integer, parameter :: unitbin =13
 end module
 
 program main
@@ -140,24 +140,20 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
 
     time=time+dt
     ntime = ntime + 1
-
-    if( mod(ntime,10) .eq. 0 ) then
-       call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
-       write(unitevo,*) time, phys_evo(1:nevo)
-    endif
     call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
 
-    print*, "ntime = ",ntime, "time = ",time, dt
+    if( mod(ntime,10) .eq. 0 ) then
+       write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
+       call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
+       write(unitevo,'(*(1X,ES24.16E3))') time, phys_evo(1:nevo)
+    endif
 
     if(time >= timemax) exit 
-!    if(ntime >= 1000) exit 
   enddo 
-!      t1 = omp_get_wtime()
-!     write(*,*) "max threads =", omp_get_max_threads() !, (t1 - t0), " s"
   close(unitevo)
 
 
-!      write(6,*) "program has been finished"
+  write(6,*) "program has been finished"
 
 end program main
 !-------------------------------------------------------------------
@@ -204,33 +200,20 @@ real(8), intent(in ) :: xv(nxtot), yv(nytot)
 real(8), intent(out) :: Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: Bs(3,nxtot,nytot)
 real(8), intent(out) :: Bc(3,nxtot,nytot)
-real(8) :: pi, den, B0, rho1, rho2, dv, wid, v1, v2, sig
 
-      pi = acos(-1.0d0)
-      B0 = 0.5d0*sqrt( abs(grav_accy)/(2.0*2.0d0*pi) )
-
-      do j=js,je
-      do i=is,ie
-           if( yv(j) .lt. 0.0d0 ) then
-               den = 1.0d0
-           else 
-               den = 2.0d0
-           endif
-           Q(IDN,i,j) = den
-           Q(IVX,i,j) = 0.0d0
-           Q(IVY,i,j) = 0.0d0
-           Q(IVZ,i,j) = 0.0d0
-           Q(IPR,i,j) = 2.5d0 + grav_accy*den*yv(j)
-
-           Q(IVY,i,j)= 0.01d0/4.0d0 &
-                     & *(-dcos(2.0d0*pi*(xv(i)-(xmax+xmin)/2.0d0)/(xmax-xmin))) &
-                     & *(1.0+cos(2.0d0*pi*(yv(j)-(ymax+ymin)/2.0d0)/(ymax-ymin)))
-      enddo
-      enddo
+    do j=js,je
+    do i=is,ie
+         Q(IDN,i,j) = 1.0d0
+         Q(IPR,i,j) = 1.0d0
+         Q(IVX,i,j) = 0.0d0
+         Q(IVY,i,j) = 0.0d0
+         Q(IVZ,i,j) = 0.0d0
+    enddo
+    enddo
 
     do j=js,je
     do i=is,ie+1
-        Bs(1,i,j) = B0
+        Bs(1,i,j) = 0.0d0
     enddo
     enddo
 
@@ -245,6 +228,7 @@ real(8) :: pi, den, B0, rho1, rho2, dv, wid, v1, v2, sig
         Bs(3,i,j) = 0.0d0
     enddo
     enddo
+
 
     call CellCenterMagneticField(is, ie, js, je, Bs, Bc)
 
@@ -451,7 +435,7 @@ end subroutine CellCenterMagneticField
 !-------------------------------------------------------------------
 real(8) function TimestepControl(xf, yf, Q, Bc )
 use params, only : nxtot,nytot,NVAR,is, ie, js, je, &
-                   IDN, IVX, IVY, IVZ, IPR, gam, Ccfl
+                   IDN, IVX, IVY, IVZ, IPR, gam, cfl_number
 implicit none
 real(8), intent(in) :: xf(nxtot), yf(nytot)
 real(8), intent(in) :: Q(NVAR,nxtot,nytot), Bc(3,nxtot,nytot)
@@ -474,7 +458,7 @@ integer::i,j
         enddo
 !$omp end parallel do
 
-        TimestepControl = Ccfl* dtmin
+        TimestepControl = cfl_number* dtmin
 
 return
 end function TimestepControl
@@ -1223,7 +1207,7 @@ integer, save :: nsnap = 0
 
      close(unitbin)
 
-     write(6,*) "output:  ",filename,time
+     write(6,'(A,A,1X,ES12.5)') "output file:", trim(filename), time
 
       nsnap=nsnap+1
       tsnap=tsnap + dtsnap
@@ -1255,24 +1239,18 @@ implicit none
 real(8), intent(in) :: xv(nxtot), yv(nytot)
 real(8), intent(in) :: Q(NVAR,nxtot,nytot), Bc(3,nxtot,nytot), Bs(3,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
-integer::i,j
-real(8) :: dvx, er_divBc, er_divBs
+integer :: i,j
+real(8) :: tot
 
-      dvx = 0.0d0
-      er_divBc = 0.0d0
-      er_divBs = 0.0d0
+      tot = 0.0d0
       do j=js,je
       do i=is,ie
-           dvx = dvx + Q(IVX,i,j)**2
-           er_divBs = er_divBs + ( Bs(1,i+1,j) - Bs(1,i,j) + Bs(2,i,j+1) - Bs(2,i,j) )**2 &
-                       /( Bc(1,i,j)**2 + Bc(2,i,j)**2 )
-           er_divBc = er_divBc + 0.5d0*( Bc(1,i+1,j) - Bc(1,i-1,j) + Bc(2,i,j+1) - Bc(2,i,j-1) )**2 &
-                                       /( Bc(1,i,j)**2 + Bc(2,i,j)**2 )
+          tot = tot + Q(IDN,i,j)
       enddo
       enddo
-      phys_evo(1) = sqrt(dvx/dble(nx*ny))
-      phys_evo(2) = sqrt(er_divBc/dble(nx*ny))
-      phys_evo(3) = sqrt(er_divBs/dble(nx*ny))
+      phys_evo(1) = tot
+      phys_evo(2) = tot
+      phys_evo(3) = tot
       
 return
 end subroutine RealtimeAnalysis

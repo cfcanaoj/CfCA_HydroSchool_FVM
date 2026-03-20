@@ -9,7 +9,7 @@ integer, parameter :: ngh = 2            ! the number of ghost cells
 integer, parameter :: nxtot = nx+2*ngh+1 ! the total number of face-centered grids including ghost cells
 integer, parameter :: is = ngh+1         ! the index of the leftmost grid
 integer, parameter :: ie = nx+ngh     ! the index of the rightmost grid
-real(8), parameter :: x1min = -0.5d0, x1max = 0.5d0
+real(8), parameter :: xmin = -0.5d0, xmax = 0.5d0
 
 ! indices of the primitive variables
 integer, parameter :: IDN = 1
@@ -22,15 +22,15 @@ integer, parameter :: IVX = 2
 integer, parameter :: IEN = 3
 
 ! thermodynamics
-real(8),parameter :: gam=1.4d0 !! adiabatic index
+real(8),parameter :: gam = 1.4d0 !! adiabatic index
 
 ! CFL number
 real(8),parameter :: cfl_number = 0.3
 
 ! output 
-character(20),parameter::dirname="hll" ! directory name
+character(20),parameter::dirname="lax" ! directory name
 integer, parameter :: unitsnap = 17
-real(8), parameter :: dtsnap=5.0d-3    ! time interval to ouput snapshots
+real(8), parameter :: dtsnap = 5.0d-3    ! time interval to ouput snapshots
 
 ! realtime analysis 
 integer, parameter :: unitevo = 11
@@ -68,6 +68,7 @@ real(8), external :: TimestepControl
       call GenerateGrid(xf, xv)
       call GenerateProblem(xv, Q)
       call Prim2Consv(Q, U)
+      call BoundaryCondition(Q)
       call Output( time, .TRUE., xv, Q )
 
       write(6,*) "Start the simulation"
@@ -104,22 +105,22 @@ end program main
 !   This routine fills:
 !     - xf(:): face (cell-boundary) coordinates
 !     - xv(:): cell-center coordinates
-!   The grid uses global parameters (x1min, x1max, nx, ngh, ...).
+!   The grid uses global parameters (xmin, xmax, nx, ngh, ...).
 !
 ! Notes:
 !   Be careful about array sizes when mixing cell-centered and face-centered
 !   quantities. The number of faces is (number of cells + 1).
 !=============================================================
 subroutine GenerateGrid(xf, xv)
-use params, only : x1min, x1max, nxtot, ngh, nx
+use params, only : xmin, xmax, nxtot, ngh, nx
 implicit none
 real(8), intent(out) :: xf(nxtot), xv(nxtot)
 real(8) :: dx
 integer::i
 
-    dx=(x1max-x1min)/nx
+    dx=(xmax-xmin)/nx
     do i=1,nxtot
-         xf(i) = dx*(i-(ngh+1))+x1min
+         xf(i) = dx*(i-(ngh+1))+xmin
     enddo
     do i=1,nxtot-1
          xv(i) = 0.5d0*(xf(i+1)+xf(i))
@@ -137,22 +138,16 @@ end subroutine GenerateGrid
 !   Ghost zones are filled later by BoundaryCondition().
 !=============================================================
 subroutine GenerateProblem(xv, Q)
-use params, only: IDN, IVX, IPR, NVAR, is, ie, nxtot, gam
+use params, only: IDN, IVX, IPR, NVAR, is, ie, nxtot, gam, xmin, xmax
 implicit none
 integer::i
 real(8), intent(in ) :: xv(nxtot)
 real(8), intent(out) :: Q(NVAR,nxtot)
 
       do i=is,ie
-         if( xv(i) < 0.0d0 ) then 
-             Q(IDN,i) = 1.0d0
-             Q(IVX,i) = 0.0d0
-             Q(IPR,i) = 1.0d0
-        else 
-             Q(IDN,i) = 0.125d0
-             Q(IVX,i) = 0.0d0
-             Q(IPR,i) = 0.1d0
-         endif
+          Q(IDN,i) = 1.0d0
+          Q(IVX,i) = 0.0d0
+          Q(IPR,i) = 1.0d0
       enddo
 
 return
@@ -200,9 +195,9 @@ real(8), intent(out) :: U(NVAR,nxtot)
 integer::i
 
     do i=is,ie
-        U(IDN,i) = Q(IDN,i)
-        U(IMX,i) = Q(IDN,i)*Q(IVX,i)
-        U(IEN,i)  = 0.5d0*Q(IDN,i)*Q(IVX,i)**2 + Q(IPR,i)/(gam - 1.0d0)
+        U(IDN,i) = 1.0d0
+        U(IMX,i) = 0.0d0
+        U(IEN,i) = 1.0d0
     enddo
       
 return
@@ -224,9 +219,9 @@ real(8), intent(out) :: Q(NVAR,nxtot)
 integer::i
 
     do i=is,ie
-        Q(IDN,i) = U(IDN,i)
-        Q(IVX,i) = U(IMX,i)/U(IDN,i)
-        Q(IPR,i) = ( U(IEN,i) - 0.5d0*U(IMX,i)**2/U(IDN,i) )*(gam-1.0d0)
+        Q(IDN,i) = 1.0d0
+        Q(IVX,i) = 0.0d0
+        Q(IPR,i) = 1.0d0
     enddo
 
 return
@@ -293,8 +288,7 @@ real(8),dimension(NVAR):: flx
     enddo
 
     do i=is,ie+1
-!       call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx)
-       call HLL(Ql(:,i),Qr(:,i),flx)
+       call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx)
        do ihy=1,NVAR 
            F(ihy,i)  = flx(ihy)
        enddo
@@ -382,52 +376,9 @@ use params, only : IDN, IVX, IPR, IMX, IEN, NVAR, gam
 implicit none
 real(8),intent(in)  :: Ql(NVAR), Qr(NVAR)
 real(8),intent(out) :: flx(NVAR)
-integer :: n
-real(8):: Ul(NVAR), Ur(NVAR)
-real(8):: Fl(NVAR), Fr(NVAR)
-real(8):: csl,csr
-real(8):: sl, sr
+real(8) :: Ul(NVAR), Ur(NVAR)
+real(8) :: Fl(NVAR), Fr(NVAR)
 
-    ! conserved variables in the left and right states
-    Ul(IDN) = Ql(IDN)
-    Ur(IDN) = Qr(IDN)
-
-    Ul(IMX) = Ql(IDN)*Ql(IVX)
-    Ur(IMX) = Qr(IDN)*Qr(IVX)
-
-    Ul(IEN) = 0.5d0*Ql(IDN)*Ql(IVX)**2 + Ql(IPR)/(gam - 1.0d0)
-    Ur(IEN) = 0.5d0*Qr(IDN)*Qr(IVX)**2 + Qr(IPR)/(gam - 1.0d0)
-
-    ! flux in the left and right states
-    Fl(IDN) = Ul(IMX)
-    Fr(IDN) = Ur(IMX)
-
-    Fl(IMX) = Ql(IPR) + Ql(IDN)*Ql(IVX)**2 
-    Fr(IMX) = Qr(IPR) + Qr(IDN)*Qr(IVX)**2 
-
-
-    Fl(IEN) = ( gam*Ql(IPR)/(gam - 1.0d0) + 0.5d0*Ql(IDN)*Ql(IVX)**2)*Ql(IVX)
-    Fr(IEN) = ( gam*Qr(IPR)/(gam - 1.0d0) + 0.5d0*Qr(IDN)*Qr(IVX)**2)*Qr(IVX)
-
-    csl = dsqrt(gam*Ql(IPR)/Ql(IDN))
-    csr = dsqrt(gam*Qr(IPR)/Qr(IDN))
-
-    sl = min(Ql(IVX),Qr(IVX)) - max(csl,csr)
-    sr = max(Ql(IVX),Qr(IVX)) + max(csl,csr)
-
-    if( sl > 0.0d0 ) then 
-        do n=1,NVAR
-            flx(n) = Fl(n)
-        enddo
-    else if (sr < 0.0d0 ) then
-        do n=1,NVAR
-             flx(n) = Fr(n)
-        enddo
-    else 
-        do n=1,NVAR
-            flx(n)  = (sr*Fl(n) - sl*Fr(n) + sl*sr*( Ur(n) - Ul(n) ))/(sr - sl)
-        enddo
-    endif
 
 return
 end subroutine HLL
@@ -497,7 +448,7 @@ integer :: nsnap = 0
     open(unitsnap,file=filename,form='formatted',action="write")
     write(unitsnap,"(a2,f6.4)") "# ",time
     do i=is,ie
-         write(unitsnap,'(1p,4(es24.16,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IPR,i)
+         write(unitsnap,'(1p,4(es24.16e3,1x))') xv(i), Q(IDN,i), Q(IVX,i), Q(IPR,i)
     enddo
     close(unitsnap)
 

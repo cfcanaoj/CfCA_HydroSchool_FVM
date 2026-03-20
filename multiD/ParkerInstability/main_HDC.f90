@@ -1,31 +1,30 @@
 module params
 
-real(8), parameter:: timemax=60d0 ! simulation end time
+real(8), parameter :: timemax=60d0 ! simulation end time
 
 ! option
 integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter::nx=50   ! the number of grids in the simulation box
-integer,parameter::ny=nx*2 ! the number of grids in the simulation box
-integer,parameter::ngh=2         ! the number of ghost cells
-integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::nytot=ny+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter::is=ngh+1         ! the index of the leftmost grid
-integer,parameter::js=ngh+1         ! the index of the leftmost grid
-integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
-integer,parameter::je=ny+ngh     ! the index of the rightmost grid
-real(8),parameter::xmin=-7.5d0*acos(-1.0d0),xmax=7.5d0*acos(-1.0d0)
-real(8),parameter::ymin=-15d0*acos(-1.0d0),ymax=15d0*acos(-1.0d0)
+integer,parameter :: nx = 50   ! the number of grids in the simulation box
+integer,parameter :: ny = nx*2 ! the number of grids in the simulation box
+integer,parameter :: ngh = 2         ! the number of ghost cells
+integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: nytot = ny+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: is = ngh+1         ! the index of the leftmost grid
+integer,parameter :: js = ngh+1         ! the index of the leftmost grid
+integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
+integer,parameter :: je = ny+ngh     ! the index of the rightmost grid
+real(8),parameter :: xmin = -7.5d0*acos(-1.0d0),xmax = 7.5d0*acos(-1.0d0)
+real(8),parameter :: ymin = -15d0*acos(-1.0d0),ymax = 15d0*acos(-1.0d0)
 
-real(8),parameter::Ccfl=0.4d0
-real(8),parameter::gam=1.05d0 !! adiabatic index
+real(8),parameter :: Ccfl = 0.4d0
+real(8),parameter :: gam = 1.05d0 !! adiabatic index
 
 real(8), parameter :: Hg    = 5.0d0    ! scale hight of gravity
 real(8), parameter :: g0    = 1.47d0     ! at which TL -> TH
-!real(8), parameter :: beta0 = 1.0d0    ! plasma beta 
-real(8), parameter :: beta0 = 1.0d10    ! plasma beta 
+real(8), parameter :: beta0 = 1.0d0    ! plasma beta 
 real(8), parameter :: Ht    = 0.5d0    ! scale hight of gas temperature
 real(8), parameter :: TL    = 1.0d0/gam  ! gas temperature at the midplane
 real(8), parameter :: TH    = 25.0d0/gam ! gas temperature at upper atmospheres
@@ -54,7 +53,7 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! output 
-character(20),parameter::dirname="noB" ! directory name
+character(20),parameter::dirname="hdc" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
@@ -115,7 +114,6 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
   open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
   ntime = 1
-!  t0 = omp_get_wtime()
   mloop: do !ntime=1,ntimemax
     dt = TimestepControl(xf, yf, Q)
     if( time + dt > timemax ) dt = timemax - time
@@ -148,25 +146,20 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
     ntime = ntime+1
     call Output( time, .FALSE., xv, yv, Q)
 
-    print*, "ntime = ",ntime, "time = ",time, dt
 
     if( mod(ntime,10) .eq. 0 ) then
+      write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
       call RealtimeAnalysis(xv,yv,Q,phys_evo)
-      write(unitevo,*) time, phys_evo(1:nevo)
+      write(unitevo,'(*(1X,ES24.16E3))') time, phys_evo(1:nevo)
     endif
 
     if(time >= timemax) exit mloop
-!    if(ntime >= 1000) exit mloop
   enddo mloop
-!  t1 = omp_get_wtime()
-
-!  write(*,*) "max threads =", omp_get_max_threads()
-!  write(*,'(A,F10.6,A)') "elapsed = ", (t1 - t0), " s"
 
   close(unitevo)
-      call Output( time, .TRUE.,xv, yv, Q)
+  call Output( time, .TRUE.,xv, yv, Q)
 
-!      write(6,*) "program has been finished"
+   write(6,*) "program has been finished"
 !contains
 end program
 !=============================================================
@@ -225,40 +218,15 @@ use params, only : IDN, IVX, IVY, IVZ, IPR, IBX, IBY, IBZ, &
 implicit none
 real(8), intent(in ) :: xv(nxtot), yv(nytot), yf(nytot)
 real(8), intent(out) :: Q(NVAR,nxtot,nytot)
-integer::i, j
-real(8) :: pi 
-real(8) Pf(nytot)  ! gas pressure at cell surface obtained by numerical integration
-integer :: jmid = js + (je-js+1)/2
-real(8) :: fac = 1.0d0/(1.0d0 + 1.0d0/beta0)
-real(8) :: Pmid, pre, den
+integer :: i, j
 
-      pi = acos(-1.0d0)
-
-      Pf(jmid) = 0.0d0
-      do j=jmid+1, je+ngh+1
-          Pf(j) = Pf(j-1) - g0*tanh( yv(j-1)/Hg )*fac/( GasTemperature(yv(j-1) ) )*(yf(j) - yf(j-1))
-      enddo
-      do j=1,je-jmid+ngh+1
-          Pf(jmid-j) = Pf(jmid+j)
-      enddo
-
-      Pmid = GasTemperature(0.0d0)
-      do j=1, nytot
-         Pf(j) = Pmid*exp(Pf(j))
-      enddo
-
-      do j=js-ngh,je+ngh
-         pre = 0.5d0*(Pf(j) + Pf(j+1))
-         den = pre/GasTemperature(yv(j))
+      do j=js,je
       do i=is,ie
-         Q(IDN,i,j) = den
-         Q(IPR,i,j) = pre
-         Q(IVX,i,j) = amp*sin(2.0d0*pi*xv(i)/lam)*0.5d0*( &
-                            ( tanh( (yv(j)+4.0d0)/0.5d0) - tanh( (yv(j)+1.0d0)/0.5d0 ) ) &
-                          + ( tanh( (yv(j)-4.0d0)/0.5d0) - tanh( (yv(j)-1.0d0)/0.5d0 ) ) )
+         Q(IDN,i,j) = 1.0d0
+         Q(IPR,i,j) = 1.0d0
+         Q(IVX,i,j) = 0.0d0
          Q(IVY,i,j) = 0.0d0
          Q(IVZ,i,j) = 0.0d0
-         Q(IBX,i,j) = sqrt( 2.0d0*pre/beta0 )
          Q(IBX,i,j) = 0.0d0
          Q(IBY,i,j) = 0.0d0
          Q(IBZ,i,j) = 0.0d0
@@ -266,14 +234,7 @@ real(8) :: Pmid, pre, den
       enddo
       enddo
 
-    contains 
-        real(8) function GasTemperature( y ) 
-        real(8), intent(in) :: y 
-
-            GasTemperature = TL + 0.5d0*(TH - TL)*( tanh( (abs(y) - y0)/Ht ) + 1.0d0 )
-
-        end function GasTemperature
-
+return 
 end subroutine GenerateProblem
 !=============================================================
 ! BoundaryCondition
@@ -1090,7 +1051,7 @@ integer, save :: nsnap = 0
           close(unitsnap)
       endif
 
-    write(6,*) "output binary file:  ",filename,time
+    write(6,'(A,A,1X,ES12.5)') "output file:", trim(filename), time
 
     nsnap=nsnap+1
     tsnap=tsnap + dtsnap
@@ -1150,19 +1111,17 @@ implicit none
 real(8), intent(in)  :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
 integer::i,j
-real(8) :: dby, er_divB
+real(8) :: tot 
 
-      dby = 0.0d0
-      er_divB = 0.0d0
+
+      tot = 0.0d0
       do j=js,je
       do i=is,ie
-           dby = dby + Q(IBY,i,j)**2
-           er_divB = er_divB + 0.5d0*( Q(IBX,i+1,j) - Q(IBX,i-1,j) + Q(IBY,i,j+1) - Q(IBY,i,j-1) )**2 &
-                                       /( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 )
+          tot = tot + Q(IDN,i,j)
       enddo
       enddo
-      phys_evo(1) = sqrt(dby/dble(nx*ny))
-      phys_evo(2) = sqrt(er_divB/dble(nx*ny))
+      phys_evo(1) = tot
+      phys_evo(2) = tot
       
 return
 end subroutine
