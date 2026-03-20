@@ -559,7 +559,7 @@ subroutine Output(flag_force,flag_binary,dirname)
       
      write(filename,'(a4,i5.5,a4)')"snap",nout,".bin"
      filename = trim(dirname)//filename
-     open(newunit=unitbin,file=filename,status='replace',form='binary') 
+     open(newunit=unitbin,file=filename,status='replace',form='unformatted',access="stream",action="write")
      write(unitbin) time
      write(unitbin) izones
      write(unitbin) jzones

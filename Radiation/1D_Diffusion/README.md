@@ -33,9 +33,9 @@ python main_analytic.py
 
 ## 可視化 (gnuplot)
 ### リアルタイム解析
-簡単にリアルタイム解析をしたいときは`RealTimeAnim.plt`を実行します。
+簡単にリアルタイム解析をしたいときは`RealtimeAnim.plt`を実行します。
 ```bash
-gnuplot -c RealTimeAnim.plt m1
+gnuplot -c RealtimeAnim.plt m1
 ```
 ### 画像作成
 図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` のスナップショットを書きたい場合は10）です。`m1/E?????.png`として保存されます。
@@ -45,7 +45,7 @@ gnuplot -c MakePngFile.plt m1 num
 ### アニメーション	 
 このpngをAnimationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了（以下の例では1 90）。`m1/animation.mp4`として保存されます。
 ```bash
-./MakeAnim.sh m1 1 90
+./MakeAnime.sh m1 1 90
 ```
 
 ## 可視化 (python matplotlib)
@@ -57,5 +57,5 @@ python MakePlot.py m1 10
 ### アニメーション	 
 Animationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了（以下の例では1 90）。`m1/animation.mp4`として保存されます。
 ```bash
-./MakeAnim.py m1 1 90
+python MakeAnime.py m1 1 90
 ```

@@ -13,9 +13,15 @@ exefld = fld.x
 ######################	
 # complile options
 ######################
-fc=ifort -diag-disable=10448 -extend-source
-fopt=-g -traceback -O2
+# intel
+#fc=ifort -diag-disable=10448
+#fopt=-g -traceback -O2
 #fopt=-g -traceback -check all -fpe0
+
+# GNU 
+fc=gfortran
+fopt=-g -fbacktrace -O2
+#fopt= -O0 -g -fbacktrace -fcheck=all
 
 ##########################################
 # Timeseqencial data and figures
@@ -25,7 +31,7 @@ fopt=-g -traceback -O2
 # directory
 ######################
 
-all: ${exem1} ${exesn}
+all: ${exem1} ${exesn} ${exefld} 
 
 .PHONY: all clean allclean
 

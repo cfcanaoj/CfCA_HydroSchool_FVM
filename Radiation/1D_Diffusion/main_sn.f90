@@ -182,6 +182,7 @@ contains
     use modelpara
     implicit none
     integer :: i,j,k,m
+    real(8)::fini
 
     do k=ks,ke
     do j=js,je
@@ -197,8 +198,9 @@ contains
     do k=ks,ke
     do j=js,je
     do i=is,ie
+       fini = erad1*exp(-(x1b(i)/0.1)**2/2.0d0)/sum(dth(:))
         do m=1,mang
-           fdis(m,i,j,k) = erad1*exp(-(x1b(i)/0.1)**2/2.0d0)/dth(m)
+           fdis(m,i,j,k) = fini
        enddo
        flte(i,j,k) = 0.0d0/sum(dth(:)) ! [erg/cm^3]
     enddo
@@ -295,6 +297,7 @@ module timemod
   use gridmod
   use angmod
   use statemod
+  use constants
   use constants, only: cl
   implicit none
   integer:: ntime
@@ -302,7 +305,7 @@ module timemod
   real(8)::time,dt
   real(8),parameter:: cfl=0.1d0
   data time / 0.0d0 /
-  real(8),parameter:: timemax=1.0d-10
+  real(8),parameter:: timemax=30.0d0/cl
   real(8),parameter:: dtout=timemax/100
 contains
   subroutine TimeStepControl
