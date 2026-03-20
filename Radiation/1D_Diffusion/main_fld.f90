@@ -20,10 +20,10 @@ module commons
   real(8)::time,dt
   real(8),parameter:: cfl=0.1d0
   data time / 0.0d0 /
-  real(8),parameter:: timemax=1.0d-10
+  real(8),parameter:: timemax=30.0d0/cl
   real(8),parameter:: dtout=timemax/100
   
-  integer,parameter::izones=100
+  integer,parameter::izones=200
   integer,parameter::jzones=1
   integer,parameter::mgn=2
   integer,parameter::in=izones+2*mgn+1 &
@@ -36,12 +36,14 @@ module commons
        &            ,je=1 &
        &            ,ke=1
   
-  real(8),parameter:: x1min=  0.0d0,x1max=1.0d0
+  real(8),parameter:: x1min=  -1.0d0,x1max=1.0d0
   real(8),dimension(in)::x1a,x1b
   real(8),dimension(jn)::x2a,x2b
   real(8),dimension(kn)::x3a,x3b
   
   real(8),dimension(in,jn,kn):: d
+  real(8),dimension(in,jn,kn):: kappaA
+  real(8),dimension(in,jn,kn):: kappaS
   real(8),dimension(in,jn,kn):: kappa
   real(8),dimension(in,jn,kn):: Elte
       
@@ -221,8 +223,10 @@ subroutine GenerateProblem
   do i=1,in
 
      d(i,j,k) = rho0   ! [g cm^-3]
-     kappa(i,j,k) = kap0   ! [cm^2/g]
-     Elte(i,j,k) = erad0 ! [erg/cm^3]
+     kappaA(i,j,k) = 0.0d0   ! [cm^2/g]
+     kappaS(i,j,k) = kap0   ! [cm^2/g]
+     kappa(i,j,k) = kappaA(i,j,k)+kappaS(i,j,k)
+     Elte(i,j,k) = 0.0d0 ! [erg/cm^3]
 
   enddo
   enddo
@@ -380,7 +384,7 @@ subroutine UpdateRadSource
   do k=ks,ke
   do j=js,je
   do i=is,ie
-     alpha = d(i,j,k)*kappa(i,j,k)*cl*dt
+     alpha = d(i,j,k)*kappaA(i,j,k)*cl*dt
      Erad(i,j,k) = (Erad(i,j,k) + alpha*Elte(i,j,k))/(1+alpha)
   enddo
   enddo

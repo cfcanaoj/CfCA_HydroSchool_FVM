@@ -73,6 +73,7 @@ model_dirs ={
    "fld" : "FLD",
 }
 
+
 snapshots: list[FluidSnapshot] = []
 for dirname, modelname in model_dirs.items():
     filename = dirname + "/snap%05d.dat"%(step)
@@ -88,9 +89,18 @@ ax.set_ylim(0.0,1.0)
 
 enorm = 1.0e20
 timenorm = 3.0e10
+
+lw_model = {
+    "analytic": 7.5,
+    r"$S_n$": 4.5,
+    "M1": 4.5,
+    "FLD": 4.5,
+}
+
 for snap in snapshots:
 # 複数のプロットからなるグラフを作成する。
-    ax.plot(snap.x, snap.E/enorm,'-',label=snap.modelname)
+    lw = lw_model.get(snap.modelname,plt.rcParams["lines.linewidth"])
+    ax.plot(snap.x, snap.E/enorm,'-',label=snap.modelname,linewidth=lw)
 ax.text(0.9,1.04,r"$ct = %.2f$"%(snapshots[0].time*timenorm),horizontalalignment="center",fontsize=plt.rcParams["axes.labelsize"])
 ax.legend(frameon=False)
 
