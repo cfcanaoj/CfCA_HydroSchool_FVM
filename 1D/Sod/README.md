@@ -32,9 +32,14 @@ $$
 
 $\gamma=1.4$を採用している。
 
+厳密解は以下の図のようになる。
+<p align="center">
+  <img src="./sod.png" width="300">
+</p>
+
 ## ディレクトリ内の構造
 
-ファイル名         | 説明  
+ファイル名など     | 説明  
 ------------------|----------
  main.f90         | 流体学校の実習用。複数のサブルーチンが未完
  hllc.f90         | hllc流束を求めるサブルーチン
@@ -118,7 +123,7 @@ python3 MakeAnime.py 0 40 lax hdc
 
 ### スナップショットの図示
 
-* MakeCompare.py
+**MakeCompare.py**
 
 pythonを使って，複数の出力ディレクトリ内の特定snapXXXXX.datを比較するためのスクリプト
 

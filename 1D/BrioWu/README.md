@@ -1,50 +1,69 @@
-# 音波の伝播
+# Brio-Wu衝撃波管問題
 
-このディレクトリには，音波の伝播を解くサンプルコードと結果を可視化するためのファイルが入っている。
+このディレクトリには，[Brio & Wu (1988)](https://ui.adsabs.harvard.edu/link_gateway/1988JCoPh..75..400B/doi:10.1016/0021-9991(88)90120-9)が提案した衝撃波管問題を解くサンプルコードと結果を可視化するためのファイルが入っている。
 
 ## 初期条件
 
-非摂動状態として，静止した一様ガスを考える($\rho=\rho_0=1$, $v=0$, $P=P_0=1/\gamma$)。
-以下のように$+x$方向に伝播する密度摂動を考える。
+初期不連続面の左状態と右状態は以下のように設定する。
 
 $$
-\rho = \rho_0 + \delta \rho\sin(k(x - c_\mathrm{s}t)),
+\begin{pmatrix}
+\rho_{\rm L} \\
+v_{x,{\rm L}} \\
+v_{y,{\rm L}} \\
+v_{z,{\rm L}} \\
+P_{\rm L} \\
+B_{x,{\rm L}} \\
+B_{y,{\rm L}} \\
+B_{z,{\rm L}} 
+\end{pmatrix}
+=\begin{pmatrix}
+1 \\
+0 \\
+0 \\
+0 \\
+1 \\
+0.75 \\
+1 \\
+0 \\
+\end{pmatrix},
+\qquad
+\begin{pmatrix}
+\rho_{\rm R} \\
+v_{x,{\rm R}} \\
+v_{y,{\rm R}} \\
+v_{z,{\rm R}} \\
+P_{\rm R} \\
+B_{x,{\rm R}} \\
+B_{y,{\rm R}} \\
+B_{z,{\rm R}} 
+\end{pmatrix}
+=\begin{pmatrix}
+0.125 \\
+0 \\
+0 \\
+0 \\
+0.1 \\
+0.75 \\
+-1 \\
+0 \\
+\end{pmatrix},
 $$
 
-ここで，$k=2\pi/L$は波数, $L$は解散領域のサイズ，$c_\mathrm{s}=\sqrt{\gamma P_0 /\rho_0}$は音速である。
-
-上記の密度摂動と整合的な速度摂動と圧力摂動を求めよう。
-線形化した連続の式
-
-$$
-\rho_0 \frac{\partial v}{\partial x} + \frac{\partial \rho}{\partial t} = 0
-$$
-
-から，以下のように速度摂動が導かれる。
-
-$$
-\rho_0 \frac{\partial \delta v}{\partial x}
-= c_\mathrm{s}k \delta \rho\cos (k(x-c_\mathrm{s}t))
-\Rightarrow
-\delta v = c_\mathrm{s} \frac{\delta \rho}{\rho_0} \sin (k(x-c_\mathrm{s}t))
-$$
-
-断熱の式を線形化すると($d\ln (P\rho^{-\gamma})/dt = 0$), 以下のように圧力摂動を得る。
-
-$$
-\frac{\delta P}{P_0} = \gamma \frac{\delta \rho}{\rho_0}\sin(k(x - c_\mathrm{s}t))\Rightarrow
-\delta P = c_\mathrm{s}^2 \rho_0 \sin(k(x-c_\mathrm{s}t))
-$$
-
-計算領域は$-0.5<x<0.5$とし，計算領域内に1波長入る波数を考える($k=2\pi$)。
-
-
+複合波を含む厳密解は以下の図のようになる。
+<p align="center">
+  <img src="./briowu_nonregsol.png" width="600">
+</p>
 
 ## ディレクトリ内の構造
 
 ファイル名など     | 説明  
 ------------------|----------
- ans/main.f90     | 完成品 (流体学校の実習のため，SoundWave/直下にはサンプルコードがない。)
+ main.f90         | 流体学校の実習用。複数のサブルーチンが未完
+ hlld.f90         | HLLD流束を求めるサブルーチン
+ ans/main.f90     | 完成品
+ briowu_nonregsol.dat | Brio-Wu衝撃波管問題の複合波を含む厳密解
+ briowu_nonregsol.png | Brio-Wu衝撃波管問題の複合波を含む厳密解を示した図
  可視化スクリプト   | RealtimeAnim.plt, MakeAnime.sh, MakeAnime.py, MakeCompare.py
 
 

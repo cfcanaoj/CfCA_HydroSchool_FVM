@@ -1,50 +1,55 @@
-# 音波の伝播
+# 有限振幅円偏光Alfven波の伝播
 
-このディレクトリには，音波の伝播を解くサンプルコードと結果を可視化するためのファイルが入っている。
+このディレクトリには，有限振幅円偏光Alfven波の伝播を解くサンプルコードと結果を可視化するためのファイルが入っている。
 
 ## 初期条件
 
-非摂動状態として，静止した一様ガスを考える($\rho=\rho_0=1$, $v=0$, $P=P_0=1/\gamma$)。
-以下のように$+x$方向に伝播する密度摂動を考える。
+非摂動状態として，静止した一様ガスを考える($\rho=\rho_0$, $v=0$, $P=P_0$)。一様な磁場$\bm{B}=(B_0,0,0)$を考える。
+以下のように$+x$方向に伝播するAlfven波を解く。
+
+Alfv\'en波の非圧縮性は，無限小の振幅でのみ成り立ち，有限振幅では摂動の2次の項に相当する磁気圧$\delta \bm{B}_\perp^2$の変動により， 縦波が励起され得るが，円偏光したAlfv\'en波では磁気圧が空間的に厳密に一定となり，有限振幅でも厳密解になる。
+右($+x$)方向に伝播する円偏光したAlfv\'en波解は，$A$を磁場の振幅とすると，円偏光したAlfv\'en波の磁場は，
 
 $$
-\rho = \rho_0 + \delta \rho\sin(k(x - c_\mathrm{s}t)),
+\bm{B} = 
+\begin{pmatrix}
+B_{x} \\
+B_{y} \\
+B_{z} 
+\end{pmatrix}
+=\begin{pmatrix}
+B_0 \\
+AB_0\sin(kx - \omega t) \\
+AB_0\cos(kx - \omega t) \\
+\end{pmatrix},
 $$
 
-ここで，$k=2\pi/L$は波数, $L$は解散領域のサイズ，$c_\mathrm{s}=\sqrt{\gamma P_0 /\rho_0}$は音速である。
+と表せる。ここで，$\omega/k = c_\mathrm{A} = B_0/\sqrt{\rho_0}$
 
-上記の密度摂動と整合的な速度摂動と圧力摂動を求めよう。
-線形化した連続の式
-
+速度は，　
 $$
-\rho_0 \frac{\partial v}{\partial x} + \frac{\partial \rho}{\partial t} = 0
+\bm{v} = 
+\begin{pmatrix}
+v_{x} \\
+v_{y} \\
+v_{z} 
+\end{pmatrix}
+=\begin{pmatrix}
+0 \\
+-Ac_\mathrm{A}\sin(kx - \omega t) \\
+-Ac_\mathrm{A}\cos(kx - \omega t) \\
+\end{pmatrix},
 $$
+となる。
 
-から，以下のように速度摂動が導かれる。
-
-$$
-\rho_0 \frac{\partial \delta v}{\partial x}
-= c_\mathrm{s}k \delta \rho\cos (k(x-c_\mathrm{s}t))
-\Rightarrow
-\delta v = c_\mathrm{s} \frac{\delta \rho}{\rho_0} \sin (k(x-c_\mathrm{s}t))
-$$
-
-断熱の式を線形化すると($d\ln (P\rho^{-\gamma})/dt = 0$), 以下のように圧力摂動を得る。
-
-$$
-\frac{\delta P}{P_0} = \gamma \frac{\delta \rho}{\rho_0}\sin(k(x - c_\mathrm{s}t))\Rightarrow
-\delta P = c_\mathrm{s}^2 \rho_0 \sin(k(x-c_\mathrm{s}t))
-$$
-
-計算領域は$-0.5<x<0.5$とし，計算領域内に1波長入る波数を考える($k=2\pi$)。
-
+$\rho_0=1, P_0 = 10, B_0 = 1$とする。
 
 
 ## ディレクトリ内の構造
 
 ファイル名など     | 説明  
 ------------------|----------
- ans/main.f90     | 完成品 (流体学校の実習のため，SoundWave/直下にはサンプルコードがない。)
+ ans/main.f90     | 完成品 (流体学校の実習のため，AlfvenWave/直下にはサンプルコードがない。)
  可視化スクリプト   | RealtimeAnim.plt, MakeAnime.sh, MakeAnime.py, MakeCompare.py
 
 
