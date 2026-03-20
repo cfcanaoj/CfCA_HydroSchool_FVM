@@ -33,9 +33,9 @@ python main_analytic.py
 
 ## 可視化 (gnuplot)
 ### リアルタイム解析
-簡単にリアルタイム解析をしたいときは`RealTimeAnim.plt`を実行します。
+簡単にリアルタイム解析をしたいときは`RealtimeAnim.plt`を実行します。
 ```bash
-gnuplot -c RealTimeAnim.plt m1
+gnuplot -c RealtimeAnim.plt m1
 ```
 ### 画像作成
 図をpng形式で保存したい場合は以下を行なってください。`num` は保存するスナップショット番号（例: `snap00010.dat` のスナップショットを書きたい場合は10）です。`m1/E?????.png`として保存されます。
