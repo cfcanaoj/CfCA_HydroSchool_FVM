@@ -68,5 +68,5 @@ ani = ArtistAnimation(fig, frames, interval=50)
 
 # mp4 画像として保存する。
 ani.save(dirname + "/animation.mp4", writer="imagemagick")
-#plt.show()
-plt.close()
+plt.show()
+#plt.close()
