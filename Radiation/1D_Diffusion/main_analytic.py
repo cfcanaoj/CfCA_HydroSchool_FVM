@@ -52,7 +52,7 @@ E_bg = 0.0
 # -----------------------
 # Do not edit below
 # -----------------------
-def EF_analytic(x: np.ndarray, t: float) -> np.ndarray, np.ndarray:
+def EF_analytic(x: np.ndarray, t: float) -> tuple[np.ndarray, np.ndarray]:
     sig2 = sigma0**2 + 2.0 * D * t
     pref = E0 * sigma0 / np.sqrt(sig2)
     E = E_bg + pref * np.exp(- (x - x0)**2 / (2.0 * sig2))
@@ -70,8 +70,8 @@ def main():
         # columns: x, E, t
         data = np.column_stack([x, E, F, np.full_like(x, t)])
         header = (
-            f"# time= {t}\n",
-            f"#   nx= {len(x)}\n",
+            f"# time= {t}\n"
+            f"#   nx= {len(x)}\n"
              "# x E Fx \n"
         )
         np.savetxt(fn, data, header=header)
