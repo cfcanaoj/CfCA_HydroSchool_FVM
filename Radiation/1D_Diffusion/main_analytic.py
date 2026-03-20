@@ -13,7 +13,7 @@ This script writes 100 snapshots from t=0..30 into ./ana/
 
 import os
 import numpy as np
-
+from typing import Tuple
 # -----------------------
 # User settings (edit here)
 # -----------------------
@@ -52,11 +52,11 @@ E_bg = 0.0
 # -----------------------
 # Do not edit below
 # -----------------------
-def EF_analytic(x: np.ndarray, t: float) -> np.ndarray, np.ndarray:
+def EF_analytic(x: np.ndarray, t: float) -> Tuple[np.ndarray, np.ndarray]:
     sig2 = sigma0**2 + 2.0 * D * t
     pref = E0 * sigma0 / np.sqrt(sig2)
     E = E_bg + pref * np.exp(- (x - x0)**2 / (2.0 * sig2))
-    F = D*(x - x0)/sig2 * E
+    F = D*(x - x0)/sig2 * (E-E_bg)
     return E,F
 
 def main():
@@ -64,15 +64,15 @@ def main():
     x = np.linspace(xmin, xmax, nx)
 
     times = np.linspace(0.0, tmax, nsnap)
-    for n, t in enumerate(times):
+    for n, t in enumerate(times, start=1):
         E,F = EF_analytic(x, t)
         fn = os.path.join(outdir, f"snap{n:05d}.dat")
         # columns: x, E, t
-        data = np.column_stack([x, E, F, np.full_like(x, t)])
+        data = np.column_stack([x, E, F ])
         header = (
-            f"# time= {t}\n",
-            f"#   nx= {len(x)}\n",
-             "# x E Fx \n"
+            f" time= {t} \n"
+            f" nx= {len(x)} \n"
+            "x E Fx "
         )
         np.savetxt(fn, data, header=header)
 
