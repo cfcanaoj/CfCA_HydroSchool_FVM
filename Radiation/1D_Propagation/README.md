@@ -39,7 +39,7 @@ gnuplot -c MakePngFile.plt m1 num
 ### アニメーション	 
 このpngをAnimationにしたい場合以下を実行してください。第1引数: 対象ディレクトリ　第2,3引数: 使うスナップショット番号の開始と終了（以下の例では1 90）。`m1/animation.mp4`として保存されます。
 ```bash
-./MakeAnim.sh m1 1 90
+./MakeAnime.sh m1 1 90
 ```
 
 ## 可視化 (python matplotlib)
