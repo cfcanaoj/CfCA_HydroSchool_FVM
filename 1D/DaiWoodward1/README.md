@@ -52,7 +52,7 @@ $$
 
 厳密解は以下の図のようになる。
 <p align="center">
-  <img src="./daiwoodward1_exact.png" width="600">
+  <img src="./figures/daiwoodward1_exact.png" width="600">
 </p>
 
 
@@ -61,9 +61,10 @@ $$
 
 ファイル名など     | 説明  
 ------------------|----------
- ans/main.f90     | 完成品(実習のために，DaiWoodward1/直下にはサンプルプログラムがない)
+ main.f90     | サンプルコード
+ ans/main.f90     | 完成品(実習のために，完成品のバックアップ)
  daiwoodward1_exact.dat | 衝撃波管問題の厳密解
- daiwoodward1_exact.dat | 衝撃波管問題の厳密解を示した図
+ figures/daiwoodward1_exact.png | 衝撃波管問題の厳密解を示した図
  可視化スクリプト   | MakeCompare.py
 
 

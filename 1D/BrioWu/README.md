@@ -59,9 +59,10 @@ $$
 
 ファイル名など     | 説明  
 ------------------|----------
- main.f90         | 流体学校の実習用。複数のサブルーチンが未完
+ main.f90         | サンプルコード
+ exercise/main.f90 | 流体学校の実習用サンプルコード。複数のサブルーチンが未完
+ ans/main.f90     | 完成品(流体学校の実習のためにバックアップ)
  hlld.f90         | HLLD流束を求めるサブルーチン
- ans/main.f90     | 完成品
  briowu_nonregsol.dat | Brio-Wu衝撃波管問題の複合波を含む厳密解
  briowu_nonregsol.png | Brio-Wu衝撃波管問題の複合波を含む厳密解を示した図
  可視化スクリプト   | RealtimeAnim.plt, MakeAnime.sh, MakeAnime.py, MakeCompare.py

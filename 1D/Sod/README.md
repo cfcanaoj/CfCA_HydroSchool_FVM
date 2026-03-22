@@ -34,16 +34,18 @@ $\gamma=1.4$を採用している。
 
 厳密解は以下の図のようになる。
 <p align="center">
-  <img src="./sod.png" width="300">
+  <img src="./figure/sod.png" width="300">
 </p>
 
 ## ディレクトリ内の構造
 
 ファイル名など     | 説明  
 ------------------|----------
- main.f90         | 流体学校の実習用。複数のサブルーチンが未完
- hllc.f90         | hllc流束を求めるサブルーチン
+ main.f90         | サンプルコード
+ exercise/main.f90 | 流体学校の実習用。複数のサブルーチンが未完
  ans/main.f90     | 完成品
+ hllc.f90         | hllc流束を求めるサブルーチン
+ figures/sod.f90  | sod解を示した図
  RiemannSolver.py | 任意の初期条件からRiemann問題の解を求めるスクリプト
  可視化スクリプト   | RealtimeAnim.plt, MakeAnime.sh, MakeAnime.py, MakeCompare.py
 

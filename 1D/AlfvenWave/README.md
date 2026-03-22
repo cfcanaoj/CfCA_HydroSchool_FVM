@@ -49,7 +49,8 @@ $\rho_0=1, P_0 = 10, B_0 = 1$とする。
 
 ファイル名など     | 説明  
 ------------------|----------
- ans/main.f90     | 完成品 (流体学校の実習のため，AlfvenWave/直下にはサンプルコードがない。)
+ main.f90     | サンプルコード
+ ans/main.f90  | 完成品 (流体学校の実習のため，完成品をバックアップ)
  可視化スクリプト   | RealtimeAnim.plt, MakeAnime.sh, MakeAnime.py, MakeCompare.py
 
 

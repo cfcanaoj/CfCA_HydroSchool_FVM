@@ -44,7 +44,8 @@ $$
 
 ファイル名など     | 説明  
 ------------------|----------
- ans/main.f90     | 完成品 (流体学校の実習のため，SoundWave/直下にはサンプルコードがない。)
+ main.f90         | サンプルコード
+ ans/main.f90     | 完成品 (流体学校の実習のために，完成品をバックアップ)
  可視化スクリプト   | RealtimeAnim.plt, MakeAnime.sh, MakeAnime.py, MakeCompare.py
 
 

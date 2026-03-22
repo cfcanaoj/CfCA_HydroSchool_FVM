@@ -63,7 +63,7 @@ $$
 ------------------|----------
  ans/main.f90     | 完成品(実習のために，DaiWoodward1/直下にはサンプルプログラムがない)
  daiwoodward2_exact.dat | 衝撃波管問題の厳密解
- daiwoodward2_exact.dat | 衝撃波管問題の厳密解を示した図
+ figures/daiwoodward2_exact.png | 衝撃波管問題の厳密解を示した図
  可視化スクリプト   | MakeCompare.py
 
 
