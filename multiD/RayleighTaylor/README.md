@@ -6,15 +6,15 @@
 
 RT不安定性をシミュレーションするためには，運動量保存式とエネルギー方程式に源項が必要である。重力加速度を$g$とし$y$負方向に重力をかける($g<0$)と，
 
-$$
+```math
 \left(\frac{\partial \rho v_y}{\partial t}\right)_\mathrm{grav}
 = \rho g
-$$
+```
 
-$$
+```math
 \left(\frac{\partial E}{\partial t}\right)_\mathrm{grav}
 = \rho g v_y
-$$
+```
 
 となる。
 
@@ -22,27 +22,26 @@ $$
 計算領域は$-1/4\le x\le 1/4$，$-3/4\le y\le 3/4$とする。
 初期条件は，
 
-$$
-    \rho(x,y) = \left\{
-    \begin{array}{cl}
+```math
+    \rho(x,y) = 
+    \begin{cases}
         2 & \mathrm{for}~y\ge 0 \\
         1 & \mathrm{for}~y<0
-    \end{array}
-    \right.
-$$
+    \end{cases}
+```
 
-$$
+```math
 P(x,y) = P_0 + \rho(x,y) g y
-$$
+```
 
-$$
+```math
     v_y(x,y) = A \left\{1+\cos\left(2\pi \frac{y}{L_y}\right) \right\}
-    \left\{-\cos\left(2\pi \frac{x}{L_x}\right)\right\} ,\;\;v_x(x,y) = v_z(x,y) = 0
-$$
+    \left\{-\cos\left(2\pi \frac{x}{L_x}\right)\right\} ,\quad v_x(x,y) = v_z(x,y) = 0
+```
 
-$$
-    B_x(x,y) = B_0,\;\;B_y(x,y) = 0,\;\;B_z(x,y)=0
-$$
+```math
+    B_x(x,y) = B_0,\quad B_y(x,y) = 0,\quad B_z(x,y)=0
+```
 
 とする。重力加速度を$g=-0.1$とし，境界面での圧力を$P_0=2.5$とする。$y$方向に一様な初期磁場を置く。摂動は初期不連続面を波数$2\pi/L_x$の波で揺らがせるように，$v_y$に入れる。$A=2.5\times 10^{-3}$は初期摂動の大きさを表す。
 

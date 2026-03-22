@@ -7,61 +7,59 @@
 計算領域を$-1/2\le x\le 1/2, -1\le y\le 1$とする。周期境界条件を$y$方向にも適用するために，接触面を$y=\pm 1/2$の2カ所に用意する。$|y|\le 1/2$の物理量を下付き添え字1を付けて表し，それ以外の領域の物理量を下付き添え字2を付けて表す。物理量を滑らかに変化させるため，以下のように$\tanh$をつかう。
 
 
-$$
+```math
 \boldsymbol{Q}(x,y) = \frac{\boldsymbol{Q}_1 - \boldsymbol{ Q}_2}{2}
 \left[ 
 \tanh\left( \frac{y+1/2}{h} \right) 
 -\tanh\left( \frac{y-1/2}{h} \right) 
 \right]
 +\boldsymbol{Q}_2
-$$
+```
 
 流体1と流体2の混合具合を調べるために，流体の速度で移流するスカラー場$C$を導入する。
 
-$$
+```math
 \frac{DC}{Dt}=
     \frac{\partial C}{\partial t}
      + \bm{v}\cdot\bm{\nabla} C = 0
      \;\;\;\Longrightarrow\;\;\;
     \frac{\partial \rho C}{\partial t}
      + \bm{\nabla} \cdot(\rho C\bm{v}) = 0
-$$
+```
 
-$$
+```math
 \boldsymbol{Q}_1 =
-\begin{bmatrix}
+\begin{pmatrix}
 \rho_1 \\
 v_{x1} \\
 v_{y1} \\
 P_1 \\
 C_1
-\end{bmatrix}
-=
-\begin{bmatrix}
+\end{pmatrix}=
+\begin{pmatrix}
 1 \\
 1 \\
 0 \\
 1 \\
 1
-\end{bmatrix},
+\end{pmatrix},
 \qquad
 \boldsymbol{Q}_2 =
-\begin{bmatrix}
+\begin{pmatrix}
 \rho_2 \\
 v_{x2} \\
 v_{y2} \\
 P_2 \\
 C_2
-\end{bmatrix}
-=
-\begin{bmatrix}
+\end{pmatrix}=
+\begin{pmatrix}
 1 \\
 -1 \\
 0 \\
 1 \\
 0
-\end{bmatrix}
-$$
+\end{pmatrix}
+```
 
 流体1と流体2ともに音速は$\sqrt{\gamma}$である。
 
