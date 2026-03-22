@@ -8,12 +8,12 @@
 
 
 $$
-\bm{Q}(x,y) = \frac{\bm{Q}_1 - \bm{ Q}_2}{2}
+\boldsymbol{Q}(x,y) = \frac{\boldsymbol{Q}_1 - \boldsymbol{ Q}_2}{2}
 \left[ 
 \tanh\left( \frac{y+1/2}{h} \right) 
 -\tanh\left( \frac{y-1/2}{h} \right) 
 \right]
-+\bm{Q}_2
++\boldsymbol{Q}_2
 $$
 
 流体1と流体2の混合具合を調べるために，流体の速度で移流するスカラー場$C$を導入する。
@@ -28,43 +28,41 @@ $$
 $$
 
 $$
-\bm{ Q}_1 = \left(
-\begin{array}{c}
+\boldsymbol{Q}_1 =
+\begin{bmatrix}
 \rho_1 \\
 v_{x1} \\
 v_{y1} \\
 P_1 \\
-C_1 \\
-\end{array}
-\right)
-= \left(
-\begin{array}{c}
+C_1
+\end{bmatrix}
+=
+\begin{bmatrix}
 1 \\
 1 \\
 0 \\
-1 \\   
-1 \\   
-\end{array}
-\right),\;\;\;\;
-\bm{ Q}_2 = \left(
-\begin{array}{c}
+1 \\
+1
+\end{bmatrix},
+\qquad
+\boldsymbol{Q}_2 =
+\begin{bmatrix}
 \rho_2 \\
 v_{x2} \\
 v_{y2} \\
 P_2 \\
-C_2 
-\end{array}
-\right)
-= \left(
-\begin{array}{c}
+C_2
+\end{bmatrix}
+=
+\begin{bmatrix}
 1 \\
 -1 \\
-0\\
-1\\
+0 \\
+1 \\
 0
-\end{array}
-\right),\;\;\;\;
+\end{bmatrix}
 $$
+
 流体1と流体2ともに音速は$\sqrt{\gamma}$である。
 
 
