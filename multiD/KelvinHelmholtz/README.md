@@ -1,27 +1,68 @@
-# Blast waveテスト
+# Kelvin-Helmholtz不安定性
 
-このディレクトリには，Blast wave問題を解くサンプルコードと結果を可視化するためのファイルが入っている。
+このディレクトリには，Kelvin-Helmholtz問題を解くサンプルコードと結果を可視化するためのファイルが入っている。
 
 ## 初期条件
 
-Blast waveの問題設定を以下に示す。
-一様磁場を持つ，一様で静止したガスの中心の狭い領域に，高圧のガスを置く。
-計算を開始すると，高圧ガスが外に向かって膨張し，衝撃波が外に伝播する。
+計算領域を $-1/2\le x\le 1/2,\quad -1\le y\le 1$ とする。周期境界条件を $y$ 方向にも適用するために，接触面を $y=\pm 1/2$ の2カ所に用意する。 $|y|\le 1/2$ の物理量を下付き添え字1を付けて表し，それ以外の領域の物理量を下付き添え字2を付けて表す。物理量を滑らかに変化させるため，以下のように$\tanh$をつかう。
+
 
 ```math
-    \rho=1, \quad\boldsymbol{v}=\boldsymbol{0},\quad\boldsymbol{B}=(B_0/\sqrt{2},B_0/\sqrt{2},0)
+\boldsymbol{Q}(x,y) = \frac{\boldsymbol{Q}_1 - \boldsymbol{ Q}_2}{2}
+\left[ 
+\tanh\left( \frac{y+1/2}{h} \right) 
+-\tanh\left( \frac{y-1/2}{h} \right) 
+\right]
++\boldsymbol{Q}_2
+```
+
+流体1と流体2の混合具合を調べるために，流体の速度で移流するスカラー場 $C$ を導入する。
+
+```math
+\frac{DC}{Dt}=
+    \frac{\partial C}{\partial t}
+     + \boldsymbol{v}\cdot\boldsymbol{\nabla} C = 0
+     \;\;\;\Longrightarrow\;\;\;
+    \frac{\partial \rho C}{\partial t}
+     + \boldsymbol{\nabla} \cdot(\rho C\boldsymbol{v}) = 0
 ```
 
 ```math
-P =
-\begin{cases}
-10   & \text{if } |\boldsymbol{r}| < 0.1 \\
-0.1  & \text{if } |\boldsymbol{r}| \ge 0.1
-\end{cases}
+\boldsymbol{Q}_1 =
+\begin{pmatrix}
+\rho_1 \\
+v_{x1} \\
+v_{y1} \\
+P_1 \\
+C_1
+\end{pmatrix}=
+\begin{pmatrix}
+1 \\
+1 \\
+0 \\
+1 \\
+1
+\end{pmatrix},
+\qquad
+\boldsymbol{Q}_2 =
+\begin{pmatrix}
+\rho_2 \\
+v_{x2} \\
+v_{y2} \\
+P_2 \\
+C_2
+\end{pmatrix}=
+\begin{pmatrix}
+1 \\
+-1 \\
+0 \\
+1 \\
+0
+\end{pmatrix}
 ```
 
+流体1と流体2ともに音速は $\sqrt{\gamma}$ である。
 
-ここで，初期磁場強度は $B_0=10$ にする。
 
 ## ディレクトリ内の構造
 
@@ -29,7 +70,7 @@ P =
 ------------------|----------
  main_HDC.f90     | HDC法を実装したサンプルコード
  main_CT.f90      | CT法を実装したサンプルコード
- 可視化スクリプト   | MakeAnime.py, MakeAnime_vars.py, MakeCompare.py, MakeCompare_vars.py
+ 可視化スクリプト   | MakeAnime.py, MakeAnima_vars.py, MakeCompare.py, MakeCompare_vars.py
 
 
 ## 可視化

@@ -1,27 +1,57 @@
-# Blast waveテスト
+# Rayleigh-Taylor
 
-このディレクトリには，Blast wave問題を解くサンプルコードと結果を可視化するためのファイルが入っている。
+このディレクトリには，Rayleigh-Taylor問題を解くサンプルコードと結果を可視化するためのファイルが入っている。
 
 ## 初期条件
 
-Blast waveの問題設定を以下に示す。
-一様磁場を持つ，一様で静止したガスの中心の狭い領域に，高圧のガスを置く。
-計算を開始すると，高圧ガスが外に向かって膨張し，衝撃波が外に伝播する。
+RT不安定性をシミュレーションするためには，運動量保存式とエネルギー方程式に源項が必要である。重力加速度を $g$ とし $y$ 負方向に重力をかける( $g<0$ )と，
 
 ```math
-    \rho=1, \quad\boldsymbol{v}=\boldsymbol{0},\quad\boldsymbol{B}=(B_0/\sqrt{2},B_0/\sqrt{2},0)
+\left(\frac{\partial \rho v_y}{\partial t}\right)_\mathrm{grav}
+= \rho g
 ```
 
 ```math
-P =
-\begin{cases}
-10   & \text{if } |\boldsymbol{r}| < 0.1 \\
-0.1  & \text{if } |\boldsymbol{r}| \ge 0.1
-\end{cases}
+\left(\frac{\partial E}{\partial t}\right)_\mathrm{grav}
+= \rho g v_y
 ```
 
+となる。
 
-ここで，初期磁場強度は $B_0=10$ にする。
+
+計算領域は $-1/4\le x\le 1/4,\quad -3/4\le y\le 3/4$ とする。
+初期条件は，
+
+```math
+    \rho(x,y) = 
+    \begin{cases}
+        2 & \mathrm{for}~y\ge 0 \\
+        1 & \mathrm{for}~y<0
+    \end{cases}
+```
+
+```math
+P(x,y) = P_0 + \rho(x,y) g y
+```
+
+```math
+    v_y(x,y) = A \left\{1+\cos\left(2\pi \frac{y}{L_y}\right) \right\}
+    \left\{-\cos\left(2\pi \frac{x}{L_x}\right)\right\} ,\quad v_x(x,y) = v_z(x,y) = 0
+```
+
+```math
+    B_x(x,y) = B_0,\quad B_y(x,y) = 0,\quad B_z(x,y)=0
+```
+
+とする。重力加速度を $g=-0.1$ とし，境界面での圧力を $P_0=2.5$ とする。 $y$ 方向に一様な初期磁場を置く。摂動は初期不連続面を波数 $2\pi/L_x$ の波で揺らがせるように， $v_y$ に入れる。 $A=2.5\times 10^{-3}$ は初期摂動の大きさを表す。
+
+$x$ 方向には周期境界条件を課す。$y$ 方向の境界条件は，揺らぎが0の場合に平衡状態 $\partial P/\partial y=\rho g$ を維持できるように設定する。サンプルコードでは以下の境界条件を設定している。
+
+- $\rho$ と $v_x$ ， $v_z$ ， $\boldsymbol{B}$ , $\psi$ は勾配0境界にする。
+- $v_y$ に対しては反射境界を課す。
+- $P$ については，与えられた密度分布における平衡分布
+- $\partial P/\partial y=\rho g$ を数値積分して代入する。
+
 
 ## ディレクトリ内の構造
 
@@ -29,7 +59,7 @@ P =
 ------------------|----------
  main_HDC.f90     | HDC法を実装したサンプルコード
  main_CT.f90      | CT法を実装したサンプルコード
- 可視化スクリプト   | MakeAnime.py, MakeAnime_vars.py, MakeCompare.py, MakeCompare_vars.py
+ 可視化スクリプト   | MakeAnime.py, MakeAnima_vars.py, MakeCompare.py, MakeCompare_vars.py
 
 
 ## 可視化
