@@ -1,14 +1,14 @@
 module params
-real(8),parameter :: timemax = 0.1d0 ! simulation end time
+real(8),parameter:: timemax=0.08d0 ! simulation end time
 
-integer,parameter :: nx = 256*1       ! the number of grids in the simulation box
-integer,parameter :: ngh = 2            ! the number of ghost cells
-integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter :: is = ngh+1         ! the index of the leftmost grid
-integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
-real(8),parameter :: xmin = -0.5d0, xmax = 0.5d0
+integer,parameter::nx=256*1       ! the number of grids in the simulation box
+integer,parameter::ngh=2            ! the number of ghost cells
+integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter::is=ngh+1         ! the index of the leftmost grid
+integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
+real(8),parameter:: xmin=-0.5d0,xmax=0.5d0
 
-real(8),parameter ::  Bx = 0.75
+real(8),parameter:: Bx=1.41047395886939
 
 ! indices of the primitive variables
 integer, parameter :: IDN = 1
@@ -27,7 +27,7 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! adiabatic index
-real(8),parameter::gam = 5.0d0/3.0d0 
+real(8),parameter::gam=5.0d0/3.0d0 
 
 ! CFL number
 real(8),parameter :: cfl_number = 0.1d0
@@ -37,7 +37,7 @@ character(20),parameter::dirname="hlld" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
-real(8), parameter :: dtsnap=5.0d-3
+real(8), parameter :: dtsnap=2.0d-3
 
 ! realtime analysis 
 integer, parameter :: unitevo = 11
@@ -151,26 +151,29 @@ implicit none
 integer::i
 real(8), intent(in ) :: xv(nxtot)
 real(8), intent(out) :: Q(NVAR,nxtot)
+real(8) :: pi 
+    pi = acos(-1.0d0)
 
     do i=is,ie
         if( xv(i) < 0.0d0 ) then 
              Q(IDN,i) = 1.0d0
-             Q(IVX,i) = 0.0d0
+             Q(IVX,i) = 10d0
+             Q(IVY,i) = 0.0d0
+             Q(IVZ,i) = 0.0d0
+             Q(IPR,i) = 20.0d0
+             Q(IBY,i) = 5.0d0/sqrt(4.0d0*pi)
+             Q(IBZ,i) = 0.0d0
+        else 
+             Q(IDN,i) = 1.0d0
+             Q(IVX,i) = -10.0d0
              Q(IVY,i) = 0.0d0
              Q(IVZ,i) = 0.0d0
              Q(IPR,i) = 1.0d0
-             Q(IBY,i) = 1.0d0
-             Q(IBZ,i) = 0.0d0
-        else 
-             Q(IDN,i) = 0.125d0
-             Q(IVX,i) = 0.0d0
-             Q(IVY,i) = 0.0d0
-             Q(IVZ,i) = 0.0d0
-             Q(IPR,i) = 0.1d0
-             Q(IBY,i) = -1.0d0
+             Q(IBY,i) = 5.0d0/sqrt(4.0d0*pi)
              Q(IBZ,i) = 0.0d0
          endif
     enddo
+
 
 return
 end subroutine GenerateProblem

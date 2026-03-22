@@ -1,14 +1,14 @@
 module params
-real(8),parameter :: timemax = 0.1d0 ! simulation end time
+real(8),parameter:: timemax=0.2d0 ! simulation end time
 
-integer,parameter :: nx = 256*1       ! the number of grids in the simulation box
-integer,parameter :: ngh = 2            ! the number of ghost cells
-integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter :: is = ngh+1         ! the index of the leftmost grid
-integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
-real(8),parameter :: xmin = -0.5d0, xmax = 0.5d0
+integer,parameter::nx=256*1       ! the number of grids in the simulation box
+integer,parameter::ngh=2            ! the number of ghost cells
+integer,parameter::nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter::is=ngh+1         ! the index of the leftmost grid
+integer,parameter::ie=nx+ngh     ! the index of the rightmost grid
+real(8),parameter:: xmin=-0.5d0,xmax=0.5d0
 
-real(8),parameter ::  Bx = 0.75
+real(8),parameter:: Bx=0.5641895835477563
 
 ! indices of the primitive variables
 integer, parameter :: IDN = 1
@@ -27,7 +27,7 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! adiabatic index
-real(8),parameter::gam = 5.0d0/3.0d0 
+real(8),parameter::gam=5.0d0/3.0d0 
 
 ! CFL number
 real(8),parameter :: cfl_number = 0.1d0
@@ -151,26 +151,28 @@ implicit none
 integer::i
 real(8), intent(in ) :: xv(nxtot)
 real(8), intent(out) :: Q(NVAR,nxtot)
+real(8), parameter :: pi = acos(-1.0d0)
 
     do i=is,ie
         if( xv(i) < 0.0d0 ) then 
+             Q(IDN,i) = 1.08d0
+             Q(IVX,i) = 1.2d0
+             Q(IVY,i) = 0.01d0
+             Q(IVZ,i) = 0.5d0
+             Q(IPR,i) = 0.95d0
+             Q(IBY,i) = 3.6d0/sqrt(4.0d0*pi)
+             Q(IBZ,i) = 2.0d0/sqrt(4.0d0*pi)
+        else 
              Q(IDN,i) = 1.0d0
              Q(IVX,i) = 0.0d0
              Q(IVY,i) = 0.0d0
              Q(IVZ,i) = 0.0d0
              Q(IPR,i) = 1.0d0
-             Q(IBY,i) = 1.0d0
-             Q(IBZ,i) = 0.0d0
-        else 
-             Q(IDN,i) = 0.125d0
-             Q(IVX,i) = 0.0d0
-             Q(IVY,i) = 0.0d0
-             Q(IVZ,i) = 0.0d0
-             Q(IPR,i) = 0.1d0
-             Q(IBY,i) = -1.0d0
-             Q(IBZ,i) = 0.0d0
+             Q(IBY,i) = 4.0d0/sqrt(4.0d0*pi)
+             Q(IBZ,i) = 2.0d0/sqrt(4.0d0*pi)
          endif
     enddo
+
 
 return
 end subroutine GenerateProblem

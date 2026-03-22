@@ -1,14 +1,14 @@
 module params
-real(8),parameter :: timemax = 0.1d0 ! simulation end time
+real(8),parameter:: timemax=1.0d0 ! simulation end time
 
-integer,parameter :: nx = 256*1       ! the number of grids in the simulation box
-integer,parameter :: ngh = 2            ! the number of ghost cells
-integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
-integer,parameter :: is = ngh+1         ! the index of the leftmost grid
-integer,parameter :: ie = nx+ngh     ! the index of the rightmost grid
-real(8),parameter :: xmin = -0.5d0, xmax = 0.5d0
+integer,parameter :: nx=64        ! the number of grids in the simulation box
+integer,parameter :: ngh=2            ! the number of ghost cells
+integer,parameter :: nxtot=nx+2*ngh+1 ! the total number of grids including ghost cells
+integer,parameter :: is=ngh+1         ! the index of the leftmost grid
+integer,parameter :: ie=nx+ngh     ! the index of the rightmost grid
+real(8),parameter :: xmin=-0.5d0,xmax=0.5d0
 
-real(8),parameter ::  Bx = 0.75
+real(8),parameter :: Bx=1.0
 
 ! indices of the primitive variables
 integer, parameter :: IDN = 1
@@ -27,13 +27,13 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! adiabatic index
-real(8),parameter::gam = 5.0d0/3.0d0 
+real(8),parameter::gam=5.0d0/3.0d0 
 
 ! CFL number
 real(8),parameter :: cfl_number = 0.1d0
 
 ! output 
-character(20),parameter::dirname="hlld" ! directory name
+character(20),parameter::dirname="hll" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
@@ -87,8 +87,9 @@ real(8), external :: TimestepControl
          call NumericalFlux( dt, xv, Q, F )
          call UpdateConsv( dt, xf, F, U)
          call Consv2Prim( U, Q )
+
          time=time+dt
-         print*,"time = ",time, "dt = ",dt
+!         print*,"time = ",time, "dt = ",dt
          ntime = ntime + 1
          call Output( time, .FALSE., xv, Q )
 
@@ -100,10 +101,9 @@ real(8), external :: TimestepControl
          if(time >= timemax) exit 
       enddo 
       call Output( time, .TRUE., xv, Q )
-!      call AnalysisAfterSimu(time,xv,Q)
+      call AnalysisAfterSimu(time,xv,Q)
 
       write(6,*) "program has been finished"
-
 end program main
 !=============================================================
 ! GenerateGrid
@@ -151,25 +151,25 @@ implicit none
 integer::i
 real(8), intent(in ) :: xv(nxtot)
 real(8), intent(out) :: Q(NVAR,nxtot)
+real(8) :: amp, kwave,pi,B0, den0, cA
+
+    pi = acos(-1.0d0)
+    kwave = 2.0d0*pi
+    B0 = 1.0d0
+    den0 = 1.0d0
+    cA = B0/sqrt(den0)
+    amp = 0.1d0
+
 
     do i=is,ie
-        if( xv(i) < 0.0d0 ) then 
-             Q(IDN,i) = 1.0d0
-             Q(IVX,i) = 0.0d0
-             Q(IVY,i) = 0.0d0
-             Q(IVZ,i) = 0.0d0
-             Q(IPR,i) = 1.0d0
-             Q(IBY,i) = 1.0d0
-             Q(IBZ,i) = 0.0d0
-        else 
-             Q(IDN,i) = 0.125d0
-             Q(IVX,i) = 0.0d0
-             Q(IVY,i) = 0.0d0
-             Q(IVZ,i) = 0.0d0
-             Q(IPR,i) = 0.1d0
-             Q(IBY,i) = -1.0d0
-             Q(IBZ,i) = 0.0d0
-         endif
+        Q(IDN,i) = 1.0d0
+        Q(IVX,i) = 0.0d0
+        Q(IVY,i) = -amp*cA*sin(kwave*xv(i))
+        Q(IVZ,i) = -amp*cA*cos(kwave*xv(i))
+        Q(IPR,i) = 10.0d0
+
+        Q(IBY,i) = amp*B0*sin(kwave*xv(i))
+        Q(IBZ,i) = amp*B0*cos(kwave*xv(i))
     enddo
 
 return
@@ -188,13 +188,13 @@ integer::i,ihy
 
       do i=1,ngh
       do ihy=1,NVAR
-          Q(ihy,is-i)  = Q(ihy,is-1+i)
+          Q(ihy,is-i)  = Q(ihy,ie+1-i)
       enddo
       enddo
 
       do i=1,ngh
       do ihy=1,NVAR
-          Q(ihy,ie+i) = Q(ihy,ie-i+1)
+          Q(ihy,ie+i) = Q(ihy,is+i-1)
       enddo
       enddo
 
@@ -326,6 +326,7 @@ real(8) :: dQm, dQp, dQ
          else
             dQ = 0.0d0
          endif
+!         dQ = 0.0d0
 
          Ql(ihy,i+1) = Q(ihy,i) + 0.5d0*dQ
          Qr(ihy,i  ) = Q(ihy,i) - 0.5d0*dQ
@@ -334,8 +335,7 @@ real(8) :: dQm, dQp, dQ
 
       do i=is,ie+1
 !         call Lax((xv(i) - xv(i-1))/dt,Ql(:,i),Qr(:,i),flx(:))
-!         call HLL(Ql(:,i),Qr(:,i),flx(:))
-         call HLLD(Ql(:,i),Qr(:,i),flx(:))
+         call HLL(Ql(:,i),Qr(:,i),flx(:))
          do ihy=1,NVAR
             F(ihy,i)  = flx(ihy)
          enddo
@@ -865,11 +865,19 @@ real(8), intent(in)  :: xv(nxtot), Q(NVAR,nxtot)
 real(8), intent(in)  :: time
 integer :: i
 real(8) :: error
+real(8) :: amp, kwave,pi,B0, den0, cA
 
-      error = 0.0d0
-      do i=is,ie
-           error = error + 1.0d0
-      enddo
+    pi = acos(-1.0d0)
+    kwave = 2.0d0*pi
+    B0 = 1.0d0
+    den0 = 1.0d0
+    cA = B0/sqrt(den0)
+    amp = 0.1d0
+
+    error = 0.0d0
+    do i=is,ie
+        error = error + abs(Q(IBZ,i) + amp*B0*cos(kwave*(xv(i)-cA*time)))
+    enddo
 
     open(1,file="error.dat",action="write",position="append")
     write(1,*) nx, error
