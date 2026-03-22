@@ -5,7 +5,7 @@ real(8),parameter:: timemax = 10.0d0 ! simulation end time
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
   
 ! coordinate 
-integer,parameter::nx = 64   ! the number of grids in the simulation box
+integer,parameter::nx = 512  ! the number of grids in the simulation box
 integer,parameter::ny = 2*nx ! the number of grids in the simulation box
 integer,parameter::ngh = 2         ! the number of ghost cells
 integer,parameter::nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
@@ -42,7 +42,7 @@ real(8),parameter::gam=5.0d0/3.0d0 !! adiabatic index
 
 ! output 
 character(20),parameter::dirname="ct" ! directory name
-logical, parameter :: flag_binary = .false.
+logical, parameter :: flag_binary = .true.
   
 ! snapshot
 integer, parameter :: unitsnap = 17
@@ -132,13 +132,13 @@ real(8) :: t0, t1
 
     time=time+dt
     ntime = ntime + 1
-    call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
 
     if( mod(ntime,10) .eq. 0 ) then 
         write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
         call RealtimeAnalysis(xv,yv,Q,Bc,Bs,phys_evo)
         write(unitevo,'(*(1X,ES24.16E3))') time, phys_evo(1:nevo)
     endif
+    call Output( time, .FALSE., dirname, xv, yv, Q, Bc)
 
     if(time >= timemax) exit 
   enddo 
@@ -190,22 +190,34 @@ real(8), intent(in ) :: xv(nxtot), yv(nytot)
 real(8), intent(out) :: Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: Bs(3,nxtot,nytot)
 real(8), intent(out) :: Bc(3,nxtot,nytot)
+real(8) :: pi, den, B0, rho1, rho2, dv, wid, v1, v2, sig
+
+    pi = dacos(-1.0d0)
+
+    rho1 = 1.0d0
+    rho2 = 1.0d0
+    dv   = 2.00d0
+    wid  = 0.05d0
+    sig  = 0.2d0
+    B0  = sqrt(2.0d0/3.0d0)
 
     do j=js,je
     do i=is,ie
-        Q(IDN,i,j) = 1.0d0
-        Q(IVX,i,j) = 0.0d0
-        Q(IVY,i,j) = 0.0d0
+        Q(IDN,i,j) = 1.0d0 !+ 0.5d0*( dtanh( (yv(j)+0.25d0)/wid ) - tanh( (yv(j)-0.25d0)/wid) )
+        Q(IVX,i,j)  = 0.5*dv*( dtanh( (yv(j)+0.5d0)/wid ) - dtanh( (yv(j) - 0.5d0)/wid ) - 1.0d0 )
+        Q(IVY,i,j)  = 0.001d0*dsin(2.0d0*pi*xv(i))* &
+             ( dexp( - (yv(j) + 0.5d0)**2/sig**2 ) +  &
+               dexp( - (yv(j) - 0.5d0)**2/sig**2 ) )
         Q(IVZ,i,j) = 0.0d0
         Q(IPR,i,j) = 1.0d0
 
-        Q(ISC,i,j) = 0.0d0
+        Q(ISC,i,j) = 0.5d0*( dtanh( (yv(j)+0.5d0)/wid ) - tanh( (yv(j)-0.5d0)/wid) )
     enddo
     enddo
 
     do j=js,je
     do i=is,ie+1
-        Bs(1,i,j) = 0.0d0
+        Bs(1,i,j) = B0
     enddo
     enddo
 
@@ -1229,18 +1241,24 @@ implicit none
 real(8), intent(in) :: xv(nxtot), yv(nytot)
 real(8), intent(in) :: Q(NVAR,nxtot,nytot), Bc(3,nxtot,nytot), Bs(3,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
-integer :: i,j
-real(8) :: tot 
+integer::i,j
+real(8) :: dvy, er_divBc, er_divBs
 
-      tot = 0.0d0
+      dvy = 0.0d0
+      er_divBc = 0.0d0
+      er_divBs = 0.0d0
       do j=js,je
       do i=is,ie
-          tot = tot + Q(IDN,i,j)
+           dvy = dvy + Q(IVY,i,j)**2
+           er_divBs = er_divBs + ( Bs(1,i+1,j) - Bs(1,i,j) + Bs(2,i,j+1) - Bs(2,i,j) )**2 &
+                       /( Bc(1,i,j)**2 + Bc(2,i,j)**2 )
+           er_divBc = er_divBc + 0.5d0*( Bc(1,i+1,j) - Bc(1,i-1,j) + Bc(2,i,j+1) - Bc(2,i,j-1) )**2 &
+                                       /( Bc(1,i,j)**2 + Bc(2,i,j)**2 )
       enddo
       enddo
-      phys_evo(1) = tot
-      phys_evo(2) = tot
-      phys_evo(3) = tot
+      phys_evo(1) = sqrt(dvy/dble(nx*ny))
+      phys_evo(2) = sqrt(er_divBc/dble(nx*ny))
+      phys_evo(3) = sqrt(er_divBs/dble(nx*ny))
       
 return
 end subroutine RealtimeAnalysis

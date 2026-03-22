@@ -5,7 +5,7 @@ real(8), parameter:: timemax = 60d0 ! simulation end time
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
   
 ! coordinate 
-integer,parameter :: nx = 50  ! the number of grids in the simulation box
+integer,parameter :: nx = 256 ! the number of grids in the simulation box
 integer,parameter :: ny = 3*nx ! the number of grids in the simulation box
 integer,parameter :: ngh = 2         ! the number of ghost cells
 integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
@@ -51,7 +51,7 @@ real(8), parameter :: lam   = 7.5d0*acos(-1.0d0) ! wavelength of vx perturbation
 
 ! output 
 character(20),parameter::dirname="ct" ! directory name
-logical, parameter :: flag_binary = .false.
+logical, parameter :: flag_binary = .true.
   
 ! snapshot
 integer, parameter :: unitsnap = 17
@@ -204,12 +204,36 @@ real(8), intent(in ) :: xv(nxtot), yv(nytot), yf(nytot)
 real(8), intent(out) :: Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: Bs(3,nxtot,nytot)
 real(8), intent(out) :: Bc(3,nxtot,nytot)
+real(8) :: pi
+real(8) :: Pf(nytot)  ! gas pressure at cell surface obtained by numerical integration
+integer :: jmid = js + (je-js+1)/2
+real(8) :: fac = 1.0d0/(1.0d0 + 1.0d0/beta0)
+real(8) :: Pmid, pre, den
+
+    pi = dacos(-1.0d0)
+
+    Pf(jmid) = 0.0d0
+    do j=jmid+1, je+ngh+1
+          Pf(j) = Pf(j-1) - g0*tanh( yv(j-1)/Hg )*fac/( GasTemperature(yv(j-1) ) )*(yf(j) - yf(j-1))
+    enddo
+    do j=1,je-jmid+ngh+1
+          Pf(jmid-j) = Pf(jmid+j)
+    enddo
+
+    Pmid = GasTemperature(0.0d0)
+    do j=1, nytot
+         Pf(j) = Pmid*exp(Pf(j))
+    enddo
 
     do j=js,je
+         pre = 0.5d0*(Pf(j) + Pf(j+1))
+         den = pre/GasTemperature(yv(j))
     do i=is,ie
-         Q(IDN,i,j) = 1.0d0
-         Q(IPR,i,j) = 1.0d0
-         Q(IVX,i,j) = 0.0d0
+         Q(IDN,i,j) = den
+         Q(IPR,i,j) = pre
+         Q(IVX,i,j) = amp*sin(2.0d0*pi*xv(i)/lam)*0.5d0*( &
+                            ( tanh( (yv(j)+4.0d0)/0.5d0) - tanh( (yv(j)+1.0d0)/0.5d0 ) ) &
+                          + ( tanh( (yv(j)-4.0d0)/0.5d0) - tanh( (yv(j)-1.0d0)/0.5d0 ) ) )
          Q(IVY,i,j) = 0.0d0
          Q(IVZ,i,j) = 0.0d0
     enddo
@@ -217,7 +241,7 @@ real(8), intent(out) :: Bc(3,nxtot,nytot)
 
     do j=js,je
     do i=is,ie+1
-        Bs(1,i,j) = 0.0d0
+        Bs(1,i,j) = sqrt( 2.0d0*0.5*(Pf(j)+Pf(j+1))/beta0 )
     enddo
     enddo
 
@@ -235,7 +259,13 @@ real(8), intent(out) :: Bc(3,nxtot,nytot)
 
     call CellCenterMagneticField(is, ie, js, je, Bs, Bc)
 
-return 
+    contains 
+        real(8) function GasTemperature( y ) 
+        real(8), intent(in) :: y 
+
+        GasTemperature = TL + 0.5d0*(TH - TL)*( tanh( (abs(y) - y0)/Ht ) + 1.0d0 )
+        end function GasTemperature
+
 end subroutine GenerateProblem
 !-------------------------------------------------------------------
 !       Boundary Condition of the primitive variables
@@ -1243,17 +1273,23 @@ real(8), intent(in) :: xv(nxtot), yv(nytot)
 real(8), intent(in) :: Q(NVAR,nxtot,nytot), Bc(3,nxtot,nytot), Bs(3,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
 integer::i,j
-real(8) :: tot 
+real(8) :: dby, er_divBc, er_divBs
 
-      tot = 0.0d0
+      dby = 0.0d0
+      er_divBc = 0.0d0
+      er_divBs = 0.0d0
       do j=js,je
       do i=is,ie
-          tot = tot + Q(IDN,i,j)
+           dby = dby + Bc(2,i,j)**2
+           er_divBs = er_divBs + ( Bs(1,i+1,j) - Bs(1,i,j) + Bs(2,i,j+1) - Bs(2,i,j) )**2 &
+                       /( Bc(1,i,j)**2 + Bc(2,i,j)**2 )
+           er_divBc = er_divBc + 0.5d0*( Bc(1,i+1,j) - Bc(1,i-1,j) + Bc(2,i,j+1) - Bc(2,i,j-1) )**2 &
+                                       /( Bc(1,i,j)**2 + Bc(2,i,j)**2 )
       enddo
       enddo
-      phys_evo(1) = tot
-      phys_evo(2) = tot
-      phys_evo(3) = tot
+      phys_evo(1) = sqrt(dby/dble(nx*ny))
+      phys_evo(2) = sqrt(er_divBc/dble(nx*ny))
+      phys_evo(3) = sqrt(er_divBs/dble(nx*ny))
       
 return
 end subroutine RealtimeAnalysis

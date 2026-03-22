@@ -1,13 +1,13 @@
 module params
 
-real(8), parameter :: timemax = 10d0 ! simulation end time
+real(8), parameter :: timemax=10d0 ! simulation end time
 
 ! option
 integer, parameter :: flag_HDC = 1 ! 1 --> HDC on , 0 --> HDC off
 integer, parameter :: flag_flux = 2 ! 1 (HLL), 2 (HLLD)
 
 ! coordinate 
-integer,parameter :: nx = 512  ! the number of grids in the simulation box
+integer,parameter :: nx = 64   ! the number of grids in the simulation box
 integer,parameter :: ny = nx*2 ! the number of grids in the simulation box
 integer,parameter :: ngh = 2         ! the number of ghost cells
 integer,parameter :: nxtot = nx+2*ngh+1 ! the total number of grids including ghost cells
@@ -44,12 +44,12 @@ integer, parameter :: IVZ = 4
 integer, parameter :: IEN = 5
 
 ! output 
-character(20),parameter::dirname = "hdc" ! directory name
+character(20),parameter::dirname="hdc" ! directory name
 
 ! snapshot
 integer, parameter :: unitsnap = 17
-real(8), parameter:: dtsnap = 2.d-1
-logical, parameter :: flag_binary = .true.
+real(8), parameter:: dtsnap=2.d-1
+logical, parameter :: flag_binary = .false.
 
 ! realtime analysis 
 integer, parameter :: unitevo =11
@@ -57,8 +57,6 @@ integer, parameter :: nevo = 2
 
 end module
 
-!=====================================================================
-!=====================================================================
 program main
 !$ use omp_lib
 use params, only : nxtot, nytot, NVAR, dirname, unitevo, timemax, nevo
@@ -103,14 +101,14 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
   call Output( time, .TRUE., xv, yv, Q )
 
 
-    write(6,*) "Start the simulation"
-    open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
+  write(6,*) "Start the simulation"
+  open(unitevo,file=trim(dirname)//'/'//'ana.dat', action="write")
 ! main loop
-    ntime = 1
+  ntime = 1
 !  t0 = omp_get_wtime()
-    mloop: do !ntime=1,ntimemax
-        dt = TimestepControl(xf, yf, Q)
-        if( time + dt > timemax ) dt = timemax - time
+  mloop: do !ntime=1,ntimemax
+    dt = TimestepControl(xf, yf, Q)
+    if( time + dt > timemax ) dt = timemax - time
 
 !$omp parallel default(shared)
 !$omp do collapse(2) schedule(static) private(i,j,ihy)
@@ -123,36 +121,36 @@ external :: NumericalFlux, UpdateConsv, SrcTerms, Consv2Prim
     end do
 !$omp end do
 
-        call NumericalFlux( dt, xf, yf, Q, F, G )
-        call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Uo, U )
-        call SrcTerms( 0.5d0*dt, dt, Q, U)
-        call Consv2Prim( U, Q )
-        call BoundaryCondition(Q )
+    call NumericalFlux( dt, xf, yf, Q, F, G )
+    call UpdateConsv( 0.5d0*dt, xf, yf, F, G, Uo, U )
+    call SrcTerms( 0.5d0*dt, dt, Q, U)
+    call Consv2Prim( U, Q )
+    call BoundaryCondition(Q )
 
-        call NumericalFlux( dt, xf, yf, Q, F, G )
-        call UpdateConsv( dt, xf, yf, F, G, Uo, U )
-        call SrcTerms( dt, dt, Q, U)
-        call Consv2Prim( U, Q )
-        call BoundaryCondition( Q )
+    call NumericalFlux( dt, xf, yf, Q, F, G )
+    call UpdateConsv( dt, xf, yf, F, G, Uo, U )
+    call SrcTerms( dt, dt, Q, U)
+    call Consv2Prim( U, Q )
+    call BoundaryCondition( Q )
 !$omp end parallel
 
-        time = time+dt
-        ntime = ntime+1
-        call Output( time, .FALSE., xv, yv, Q)
+    time=time+dt
+    ntime = ntime+1
+    call Output( time, .FALSE., xv, yv, Q)
 
     if( mod(ntime,10) .eq. 0 ) then
-        write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
-        call RealtimeAnalysis(xv,yv,Q,phys_evo)
-        write(unitevo,'(*(1X,ES24.16E3))') time, phys_evo(1:nevo)
+      write(*,'(A,I0,A,ES12.5,A,ES12.5)') "ntime = ", ntime, " time = ", time, " dt = ", dt
+      call RealtimeAnalysis(xv,yv,Q,phys_evo)
+      write(unitevo,'(*(1X,ES24.16E3))') time, phys_evo(1:nevo)
     endif
 
     if(time >= timemax) exit mloop
   enddo mloop
+
   close(unitevo)
+      call Output( time, .TRUE.,xv, yv, Q)
 
-    call Output( time, .TRUE.,xv, yv, Q)
-
-    write(6,*) "program has been finished"
+!      write(6,*) "program has been finished"
 !contains
 end program
 !=============================================================
@@ -212,29 +210,17 @@ implicit none
 real(8), intent(in ) :: xv(nxtot), yv(nytot)
 real(8), intent(out) :: Q(NVAR,nxtot,nytot)
 integer :: i, j
-real(8) :: pi, den, B0, rho1, rho2, dv, wid, sig
-
-    pi = dacos(-1.0d0)
-
-    rho1 = 1.0d0
-    rho2 = 1.0d0
-    dv   = 2.00d0
-    wid  = 0.05d0
-    sig  = 0.2d0
-    B0  = dsqrt(2.0d0/3.0d0)
 
     do j=js,je
     do i=is,ie
        Q(IDN,i,j) = 1.0d0 
-       Q(IVX,i,j)  = 0.5*dv*( dtanh( (yv(j)+0.5d0)/wid ) - dtanh( (yv(j) - 0.5d0)/wid ) - 1.0d0 )
-       Q(IVY,i,j)  = 0.001d0*dsin(2.0d0*pi*xv(i))* &
-           ( dexp( - (yv(j) + 0.5d0)**2/sig**2 ) +  &
-             dexp( - (yv(j) - 0.5d0)**2/sig**2 ) )
+       Q(IVX,i,j) = 0.0d0
+       Q(IVY,i,j) = 0.0d0
        Q(IVZ,i,j) = 0.0d0
        Q(IPR,i,j) = 1.0d0
-       Q(ISC,i,j) = 0.5d0*( dtanh( (yv(j)+0.5d0)/wid ) - tanh( (yv(j)-0.5d0)/wid) )
+       Q(ISC,i,j) = 0.0d0
 
-       Q(IBX,i,j) = B0
+       Q(IBX,i,j) = 0.0d0
        Q(IBY,i,j) = 0.0d0
        Q(IBZ,i,j) = 0.0d0
        Q(IPS,i,j) = 0.0d0
@@ -269,14 +255,14 @@ end do
 
 ! Fill y-direction ghost zones (periodic)
 !$omp do collapse(2) schedule(static) private(i,j,ihy)
-    do j=1,ngh
-    do i=1,nxtot-1
-        do ihy=1,NVAR
-            Q(ihy,i,js-j) = Q(ihy,i,je+1-j)
-            Q(ihy,i,je+j) = Q(ihy,i,js+j-1)
-        end do
-    end do
-    end do
+do j=1,ngh
+do i=1,nxtot-1
+  do ihy=1,NVAR
+    Q(ihy,i,js-j) = Q(ihy,i,je+1-j)
+    Q(ihy,i,je+j) = Q(ihy,i,js+j-1)
+  end do
+end do
+end do
 !$omp end do
 
 return
@@ -1099,20 +1085,18 @@ use params, only : IDN, IVX, IVY, IVZ, IPR, ISC, IBX, IBY, IBZ, &
 implicit none
 real(8), intent(in)  :: xv(nxtot), yv(nytot), Q(NVAR,nxtot,nytot)
 real(8), intent(out) :: phys_evo(nevo)
-integer::i,j
-real(8) :: tot,dvy,er_divB
+integer :: i,j
+real(8) :: tot 
 
-      dvy = 0.0d0
-      er_divB = 0.0d0
+
+      tot = 0.0d0
       do j=js,je
       do i=is,ie
-           dvy = dvy + Q(IVY,i,j)**2
-           er_divB = er_divB + ( Q(IBX,i+1,j) - Q(IBX,i-1,j) + Q(IBY,i,j+1) - Q(IBY,i,j-1) )**2 &
-                       /( Q(IBX,i,j)**2 + Q(IBY,i,j)**2 )
+          tot = tot + Q(IDN,i,j)
       enddo
       enddo
-      phys_evo(1) = sqrt(dvy/dble(nx*ny))
-      phys_evo(2) = sqrt(er_divB/dble(nx*ny))
+      phys_evo(1) = tot
+      phys_evo(2) = tot
       
 return
 end subroutine
