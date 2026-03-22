@@ -1,48 +1,6 @@
-# Configured outputs
-Makefile
-1D/HD/bindata
-1D/HD/snap
-1D/MHD/bindata
-1D/SODshock1Dcpp/EXACTsl
-snap
-snap_alf
-xydata
-epsfile
-output
-pngfile
-pdffile
-hdc*
-ct*
-hlld*
-nohdc*
-lax*
-
-vis3D/hdfdata
-
-# Compiled object files
-*.o
-*.mod
-*.blg
-*.toc
-*.aux
-*.bbl
-
-# outputfile
-*.dat
-
-# movie
-*.mp4
-*.wmw
-*.png
-*.pdf
-
-# Executables
-a.out
-
-# Mac OS metadata
-.DS_Store
-
-# editor temp files
-*~
-*.swp
-ffmpeg*
+*
+!.gitignore
+!README.md
+!*.f90
+!*.py
+!*.sh
