@@ -8,20 +8,20 @@ Blast waveの問題設定を以下に示す。
 一様磁場を持つ，一様で静止したガスの中心の狭い領域に，高圧のガスを置く。
 計算を開始すると，高圧ガスが外に向かって膨張し，衝撃波が外に伝播する。
 
-$$
-    \rho=1,\;\;\bm{v}=\bm{0},\;\;\bm{B}=(B_0/\sqrt{2},B_0/\sqrt{2},0)
-$$
+```math
+    \rho=1, \quad\boldsymbol{v}=\boldsymbol{0},\quad\boldsymbol{B}=(B_0/\sqrt{2},B_0/\sqrt{2},0)
+```
 
-$$
-    P = \left\{
-    \begin{array}{cc}
-     10 & \mathrm{for~|\bm{r}|<0.1} \\
-     0.1 & \mathrm{for~|\bm{r}|\ge 0.1} \\
-    \end{array}
-    \right.
-$$
+```math
+P =
+\begin{cases}
+10   & \text{if } |\boldsymbol{r}| < 0.1 \\
+0.1  & \text{if } |\boldsymbol{r}| \ge 0.1
+\end{cases}
+```
 
-ここで，初期磁場強度は$B_0=10$にする。
+
+ここで，初期磁場強度は $B_0=10$ にする。
 
 ## ディレクトリ内の構造
 
